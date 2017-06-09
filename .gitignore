@@ -1,0 +1,9 @@
+*.o
+*.so
+*.cmd
+*.d
+*.ko
+*.pyc
+*.mod.c
+*.db
+Module.symvers
