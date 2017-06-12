@@ -9,3 +9,4 @@
 Module.symvers
 test_files/*make
 modules.order
+.tmp_versions/*

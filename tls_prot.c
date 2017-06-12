@@ -1,7 +1,8 @@
 #include "tls_prot.h"
 
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	return 36;
+	printk(KERN_ALERT "Attempting tls connect");
+	return 0;
 }
 EXPORT_SYMBOL(tls_v4_connect);
 

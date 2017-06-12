@@ -4,6 +4,8 @@
 #include <linux/socket.h>
 #include <net/sock.h>
 #include <linux/export.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
 
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int tls_disconnect(struct sock *sk, int flags);
