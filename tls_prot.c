@@ -1,7 +1,7 @@
 #include "tls_prot.h"
 
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	return 0;
+	return 36;
 }
 EXPORT_SYMBOL(tls_v4_connect);
 
