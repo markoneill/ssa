@@ -12,10 +12,6 @@
 #define DRIVER_DESC	"A loadable TLS module to give TLS functionality to the POSIX socket API"
 #define IPPROTO_TLS 	143	
 
-//extern struct proto tcp_prot;
-//extern struct proto_ops inet_stream_ops;
-//extern void inet_register_protosw(struct inet_protosw);
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
@@ -30,14 +26,7 @@ static struct inet_protosw tls_stream_protosw = {
 	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
 };
 
-static const struct net_protocol tcp_protocol = {
-	.early_demux	= tcp_v4_early_demux,
-	.handler	= tcp_v4_rcv,
-	.err_handler	= tcp_v4_err,
-	.no_policy	= 1,
-	.netns_ok	= 1,
-	.icmp_strict_tag_validation = 1,
-};
+const struct net_protocol *ipprot;
 
 void set_tls_prot(void){
 	tls_prot = tcp_prot;
@@ -62,7 +51,9 @@ static int __init tls_init(void)
 		goto out;
 	}
 
-	err = inet_add_protocol(&tcp_protocol, IPPROTO_TLS);
+	ipprot = (struct net_protocol*)kallsyms_lookup_name("tcp_protocol");
+
+	err = inet_add_protocol(ipprot, IPPROTO_TLS);
 	if (err != 0){
 		goto out_proto_unregister;
 	}
@@ -82,7 +73,7 @@ out_proto_unregister:
 static void __exit tls_exit(void)
 {
 	inet_unregister_protosw(&tls_stream_protosw);
-	inet_del_protocol(&tcp_protocol, IPPROTO_TLS);
+	inet_del_protocol(ipprot, IPPROTO_TLS);
 	proto_unregister(&tls_prot);
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }

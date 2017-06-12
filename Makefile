@@ -1,4 +1,4 @@
-ssa-objs := tls.o tls_prot.o tcp_ipv4.o
+ssa-objs := tls.o tls_prot.o 
 obj-m += ssa.o
 
 all:
