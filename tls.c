@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/kallsyms.h>
 #include <net/protocol.h>
 #include <net/tcp.h>
 #include <net/inet_common.h>
