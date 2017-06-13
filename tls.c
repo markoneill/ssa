@@ -10,7 +10,7 @@
 
 #define DRIVER_AUTHOR 	"Mark O'Neill <phoenixteam1@gmail.com> and Nick Bonner <j.nick.bonner@gmail.com>"
 #define DRIVER_DESC	"A loadable TLS module to give TLS functionality to the POSIX socket API"
-#define IPPROTO_TLS 	143	
+#define IPPROTO_TLS 	(715 % 255)	
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);
