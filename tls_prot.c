@@ -1,28 +1,31 @@
 #include "tls_prot.h"
 
+/* Original TCP reference functions */
+int (*ref_tcp_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int (*ref_tcp_disconnect)(struct sock *sk, int flags);
+void (*ref_tcp_shutdown)(struct sock *sk, int how);
+int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+                        int flags, int *addr_len);
+int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
+
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	printk(KERN_ALERT "Attempting tls connect");
-	return 0;
+	return (*ref_tcp_connect)(sk, uaddr, addr_len);
 }
-EXPORT_SYMBOL(tls_v4_connect);
 
 int tls_disconnect(struct sock *sk, int flags){
-	return 0;
+	return (*ref_tcp_disconnect)(sk, flags);
 }
-EXPORT_SYMBOL(tls_disconnect);
 
 void tls_shutdown(struct sock *sk, int how){
-	return;
+	(*ref_tcp_shutdown)(sk, how);
 }
-EXPORT_SYMBOL(tls_shutdown);
 
 int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 		int flags, int *addr_len){
-	return 0;
+	return (*ref_tcp_recvmsg)(sk, msg, len, nonblock, flags, addr_len);
 }
-EXPORT_SYMBOL(tls_recvmsg);
 
 int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
-	return 0;
+	return (*ref_tcp_sendmsg)(sk, msg, size);
 }
-EXPORT_SYMBOL(tls_sendmsg);

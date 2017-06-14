@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
+/* Corresponding TLS override functions */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int tls_disconnect(struct sock *sk, int flags);
 void tls_shutdown(struct sock *sk, int how);

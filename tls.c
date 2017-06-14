@@ -18,6 +18,14 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 
 static struct proto tls_prot;
 
+/* Original TCP reference functions */
+extern int (*ref_tcp_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+extern int (*ref_tcp_disconnect)(struct sock *sk, int flags);
+extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
+extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+                        int flags, int *addr_len);
+extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
+
 static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,
 	.protocol	= IPPROTO_TLS,
@@ -34,11 +42,22 @@ static struct net_protocol ipprot;
  */
 void set_tls_prot(void){
 	tls_prot = tcp_prot;
-//	tls_prot.connect = tls_v4_connect;
-//	tls_prot.disconnect = tls_disconnect;
-//	tls_prot.shutdown = tls_shutdown;
-//	tls_prot.recvmsg = tls_recvmsg;
-//	tls_prot.sendmsg = tls_sendmsg;
+
+	ref_tcp_connect = tls_prot.connect;
+	tls_prot.connect = tls_v4_connect;
+
+	ref_tcp_disconnect = tls_prot.disconnect;
+	tls_prot.disconnect = tls_disconnect;
+
+	ref_tcp_shutdown = tls_prot.shutdown;
+	tls_prot.shutdown = tls_shutdown;
+
+	ref_tcp_recvmsg = tls_prot.recvmsg;
+	tls_prot.recvmsg = tls_recvmsg;
+
+	ref_tcp_sendmsg = tls_prot.sendmsg;
+	tls_prot.sendmsg = tls_sendmsg;
+
 	printk(KERN_ALERT "TLS protocols set");
 }
 
