@@ -83,6 +83,11 @@ static void __exit tls_exit(void)
 {
 	inet_unregister_protosw(&tls_stream_protosw);
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
+
+	tls_prot.slab = NULL;
+	tls_prot.rsk_prot = NULL;
+	tls_prot.twsk_prot = NULL;
+
 	proto_unregister(&tls_prot);
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
