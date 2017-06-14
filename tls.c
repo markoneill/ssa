@@ -22,7 +22,7 @@ static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,
 	.protocol	= IPPROTO_TLS,
 	.prot		= &tls_prot,
-	.ops		= &inet_stream_ops,
+//	.ops		= &inet_stream_ops,
 	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
 };
 
@@ -44,18 +44,22 @@ static int __init tls_init(void)
 	static const struct net_protocol *ipprot_lookup;
 	unsigned long kallsyms_err;
 
-	printk(KERN_ALERT "Initializing TLS module");
+	printk(KERN_ALERT "Initializing TLS module\n");
 	set_tls_prot();
 	
 	err = proto_register(&tls_prot, 1);
 
-	if (err != 0){
+	if (err == 0){
+		printk(KERN_INFO "Protocol registration was successful\n");
+	}
+	else {
+		printk(KERN_INFO "Protocol registration failed\n");
 		goto out;
 	}
 
 	kallsyms_err = kallsyms_lookup_name("tcp_protocol");	
 	if (kallsyms_err == 0){
-		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address");
+		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address\n");
 		goto out_proto_unregister;
 	}
 
@@ -63,9 +67,17 @@ static int __init tls_init(void)
 	ipprot = *ipprot_lookup;
 	
 	err = inet_add_protocol(&ipprot, IPPROTO_TLS);
-	if (err != 0){
+	
+	if (err == 0){
+		printk(KERN_INFO "Protocol insertion in inet_protos[] was successful\n");
+	}
+	else {
+		printk(KERN_INFO "Protocol insertion in inet_protos[] failed\n");
 		goto out_proto_unregister;
 	}
+
+	extern const struct proto_ops inet_stream_ops;
+	tls_stream_protosw.ops = &inet_stream_ops;
 
 	inet_register_protosw(&tls_stream_protosw);
 
@@ -83,7 +95,8 @@ static void __exit tls_exit(void)
 {
 	inet_unregister_protosw(&tls_stream_protosw);
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
-
+	
+	// Set these pointers to NULL to avoid deleting tcp_prot's copied memory
 	tls_prot.slab = NULL;
 	tls_prot.rsk_prot = NULL;
 	tls_prot.twsk_prot = NULL;
