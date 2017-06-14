@@ -26,7 +26,7 @@ static struct inet_protosw tls_stream_protosw = {
 	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
 };
 
-const struct net_protocol *ipprot;
+static struct net_protocol ipprot;
 
 void set_tls_prot(void){
 	tls_prot = tcp_prot;
@@ -41,6 +41,8 @@ void set_tls_prot(void){
 static int __init tls_init(void)
 {
 	int err;	
+	static const struct net_protocol *ipprot_lookup;
+	unsigned long kallsyms_err;
 
 	printk(KERN_ALERT "Initializing TLS module");
 	set_tls_prot();
@@ -51,9 +53,16 @@ static int __init tls_init(void)
 		goto out;
 	}
 
-	ipprot = (struct net_protocol*)kallsyms_lookup_name("tcp_protocol");
+	kallsyms_err = kallsyms_lookup_name("tcp_protocol");	
+	if (kallsyms_err == 0){
+		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address");
+		goto out_proto_unregister;
+	}
 
-	err = inet_add_protocol(ipprot, IPPROTO_TLS);
+	ipprot_lookup = (struct net_protocol*)kallsyms_err;
+	ipprot = *ipprot_lookup;
+	
+	err = inet_add_protocol(&ipprot, IPPROTO_TLS);
 	if (err != 0){
 		goto out_proto_unregister;
 	}
@@ -73,7 +82,7 @@ out_proto_unregister:
 static void __exit tls_exit(void)
 {
 	inet_unregister_protosw(&tls_stream_protosw);
-	inet_del_protocol(ipprot, IPPROTO_TLS);
+	inet_del_protocol(&ipprot, IPPROTO_TLS);
 	proto_unregister(&tls_prot);
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
