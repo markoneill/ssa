@@ -22,12 +22,16 @@ static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,
 	.protocol	= IPPROTO_TLS,
 	.prot		= &tls_prot,
-//	.ops		= &inet_stream_ops,
+	.ops		= &inet_stream_ops,
 	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
 };
 
 static struct net_protocol ipprot;
 
+/*
+ *	Creates a copy of the tcp_prot structure and overrides
+ *	posix method's functionality.
+ */
 void set_tls_prot(void){
 	tls_prot = tcp_prot;
 //	tls_prot.connect = tls_v4_connect;
@@ -45,8 +49,9 @@ static int __init tls_init(void)
 	unsigned long kallsyms_err;
 
 	printk(KERN_ALERT "Initializing TLS module\n");
-	set_tls_prot();
 	
+	/* Establish and register the tls_prot structure */
+	set_tls_prot();
 	err = proto_register(&tls_prot, 1);
 
 	if (err == 0){
@@ -57,12 +62,18 @@ static int __init tls_init(void)
 		goto out;
 	}
 
+	/*
+	 * Retrieve the non-exported tcp_protocol struct address location 
+	 * and verify that it was found. If it fails, unregister the protocol
+	 * and exit the module initialization.
+	 */
 	kallsyms_err = kallsyms_lookup_name("tcp_protocol");	
 	if (kallsyms_err == 0){
 		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address\n");
 		goto out_proto_unregister;
 	}
 
+	/* Create a copy of the tcp net_protocol and register it to the IPPROTO_TLS macro */
 	ipprot_lookup = (struct net_protocol*)kallsyms_err;
 	ipprot = *ipprot_lookup;
 	
@@ -76,9 +87,9 @@ static int __init tls_init(void)
 		goto out_proto_unregister;
 	}
 
-	extern const struct proto_ops inet_stream_ops;
-	tls_stream_protosw.ops = &inet_stream_ops;
+//	tls_stream_protosw.ops = &inet_stream_ops;
 
+	/* Register the tls_stream_protosw */
 	inet_register_protosw(&tls_stream_protosw);
 
 	printk(KERN_INFO "TLS Module loaded and tls_prot registered\n");
@@ -93,10 +104,11 @@ out_proto_unregister:
 
 static void __exit tls_exit(void)
 {
+	/* Unregister the protocols and structs in the reverse order they were registered */
 	inet_unregister_protosw(&tls_stream_protosw);
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
 	
-	// Set these pointers to NULL to avoid deleting tcp_prot's copied memory
+	/* Set these pointers to NULL to avoid deleting tcp_prot's copied memory */
 	tls_prot.slab = NULL;
 	tls_prot.rsk_prot = NULL;
 	tls_prot.twsk_prot = NULL;
