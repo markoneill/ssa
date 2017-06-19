@@ -5,18 +5,25 @@
 #include <net/tcp.h>
 #include <net/inet_common.h>
 #include <net/sock.h>
+#include <linux/netfilter.h>
 #include "tls_prot.h"
 
 
 #define DRIVER_AUTHOR 	"Mark O'Neill <phoenixteam1@gmail.com> and Nick Bonner <j.nick.bonner@gmail.com>"
 #define DRIVER_DESC	"A loadable TLS module to give TLS functionality to the POSIX socket API"
 #define IPPROTO_TLS 	(715 % 255)	
+#define TLS_SOCKOPT_BASE	85
+#define MAX_HOST_LEN		255
+#define TLS_SOCKOPT_SET		(TLS_SOCKOPT_BASE)
+#define TLS_SOCKOPT_GET		(TLS_SOCKOPT_BASE)
+#define TLS_SOCKOPT_MAX		(TLS_SOCKOPT_BASE + 1)
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 
 static struct proto tls_prot;
+static struct net_protocol ipprot;
 
 /* Original TCP reference functions */
 extern int (*ref_tcp_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -26,6 +33,7 @@ extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, i
                         int flags, int *addr_len);
 extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 
+/* The TLS protocol structure to be registered */
 static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,
 	.protocol	= IPPROTO_TLS,
@@ -34,7 +42,25 @@ static struct inet_protosw tls_stream_protosw = {
 	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
 };
 
-static struct net_protocol ipprot;
+
+/* Defines the socket options to specify a URL for TLS protocol */
+int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len);
+int get_host_name(struct sock *sk, int cmd, void __user *user, int *len);
+static struct nf_sockopt_ops tls_sockopts = {
+	.pf		= PF_INET,
+	.set_optmin	= TLS_SOCKOPT_SET,
+	.set_optmax	= TLS_SOCKOPT_MAX,
+	.set		= set_host_name,
+	.get_optmin	= TLS_SOCKOPT_GET,
+	.get_optmax	= TLS_SOCKOPT_MAX,
+	.get		= get_host_name,
+	.owner		= THIS_MODULE
+};
+
+struct sock_host_name {
+	struct sock sk;
+	char *host_name;
+};
 
 /*
  *	Creates a copy of the tcp_prot structure and overrides
@@ -68,6 +94,9 @@ static int __init tls_init(void)
 	unsigned long kallsyms_err;
 
 	printk(KERN_ALERT "Initializing TLS module\n");
+
+	/* register the tls socket options */
+	nf_register_sockopt(&tls_sockopts);
 	
 	/* Establish and register the tls_prot structure */
 	set_tls_prot();
@@ -106,8 +135,6 @@ static int __init tls_init(void)
 		goto out_proto_unregister;
 	}
 
-//	tls_stream_protosw.ops = &inet_stream_ops;
-
 	/* Register the tls_stream_protosw */
 	inet_register_protosw(&tls_stream_protosw);
 
@@ -134,6 +161,52 @@ static void __exit tls_exit(void)
 
 	proto_unregister(&tls_prot);
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
+}
+
+
+int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
+{
+	char *loc_host_name;
+
+	loc_host_name = ((struct sock_host_name *)sk)->host_name;
+	if (cmd != TLS_SOCKOPT_SET){
+		return EINVAL;
+	}
+	if (strnlen((char *)user, MAX_HOST_LEN + 1) > MAX_HOST_LEN){
+		return EINVAL;
+	}
+	krealloc(loc_host_name, len, GFP_KERNEL);
+	if (copy_from_user(loc_host_name, user, len) != 0){
+		return EFAULT;
+	} 
+	else {
+		return  0;
+	}
+	
+}
+
+int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
+{
+	char *m_host_name;
+	size_t host_name_len;
+	
+	if (cmd != TLS_SOCKOPT_GET){
+		return EINVAL;
+	}
+		
+	m_host_name = ((struct sock_host_name*)sk)->host_name;
+	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
+	if ((unsigned int) *len < host_name_len){
+		printk(KERN_ALERT "len smaller than requested host_name");
+		return EINVAL;	
+	} 
+	if (copy_to_user(user, m_host_name, host_name_len) != 0 ){
+		printk(KERN_ALERT "host_name copy to user failed");
+		return EFAULT;
+	}
+	else {
+		return 0;
+	}
 }
 
 module_init(tls_init);

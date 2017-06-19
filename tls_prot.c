@@ -19,6 +19,7 @@ int tls_disconnect(struct sock *sk, int flags){
 
 void tls_shutdown(struct sock *sk, int how){
 	(*ref_tcp_shutdown)(sk, how);
+	// Will need to free host_name from sock
 }
 
 int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
