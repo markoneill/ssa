@@ -87,6 +87,15 @@ void set_tls_prot(void){
 	printk(KERN_ALERT "TLS protocols set");
 }
 
+void register_sockopts(void){
+	int err;
+	
+	err = nf_register_sockopt(&tls_sockopts);
+	if (err != 0){
+		printk(KERN_ALERT "Failed to register new sock opts with the kernel. TLS host_name specification will fail\n");
+	}
+}
+
 static int __init tls_init(void)
 {
 	int err;	
@@ -96,7 +105,7 @@ static int __init tls_init(void)
 	printk(KERN_ALERT "Initializing TLS module\n");
 
 	/* register the tls socket options */
-	nf_register_sockopt(&tls_sockopts);
+	register_sockopts();
 	
 	/* Establish and register the tls_prot structure */
 	set_tls_prot();

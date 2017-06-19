@@ -1,5 +1,6 @@
 /*
 client.c -- a stream socket client demo
+
 */
 
 #include <stdio.h>
@@ -35,6 +36,9 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s[INET6_ADDRSTRLEN];
+    int optlen;
+    char *optval;
+    char *optval2;
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -78,6 +82,14 @@ int main(int argc, char *argv[])
     printf("client: connecting to %s\n", s);
 
     freeaddrinfo(servinfo); // all done with this structure
+
+    //Set socket options testing
+    optval = "google.com";
+    setsockopt(sockfd, SOL_SOCKET, 85, optval, strnlen(optval, 255));
+
+    //Get socket options testing
+    getsockopt(sockfd, SOL_SOCKET, 85, optval2, &optlen);
+    printf("%i\t%s", optlen, optval2);
 
     if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
         perror("recv");
