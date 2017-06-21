@@ -39,6 +39,7 @@ int main(int argc, char *argv[])
     int optlen;
     char *optval;
     char *optval2;
+    int err;
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -85,11 +86,20 @@ int main(int argc, char *argv[])
 
     //Set socket options testing
     optval = "google.com";
-    setsockopt(sockfd, SOL_SOCKET, 85, optval, strnlen(optval, 255));
-
-    //Get socket options testing
-    getsockopt(sockfd, SOL_SOCKET, 85, optval2, &optlen);
-    printf("%i\t%s", optlen, optval2);
+    err = setsockopt(sockfd, SOL_SOCKET, 85, optval, strnlen(optval, 255));
+    if (err != 0){
+        printf("setsockopt failed with error code %i\n", err);
+    }
+    else {
+        //Get socket options testing
+        err = getsockopt(sockfd, SOL_SOCKET, 85, optval2, &optlen);
+        if (err != 0){
+            printf("getsockopt failed with error code %i\n", err);
+        }
+        else {
+            printf("%i\t%s\n", optlen, optval2);
+        }
+    }
 
     if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
         perror("recv");

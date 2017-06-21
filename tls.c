@@ -177,6 +177,8 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
 
+	printk(KERN_ALERT "host_name registered with socket");
+
 	loc_host_name = ((struct sock_host_name *)sk)->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		return EINVAL;
