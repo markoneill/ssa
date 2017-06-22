@@ -186,7 +186,8 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	if (strnlen((char *)user, MAX_HOST_LEN + 1) > MAX_HOST_LEN){
 		return EINVAL;
 	}
-	krealloc(loc_host_name, len, GFP_KERNEL);
+	loc_host_name = krealloc(loc_host_name, len, GFP_KERNEL);
+	((struct sock_host_name *)sk)->host_name = loc_host_name;
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
 	} 

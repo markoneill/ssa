@@ -62,6 +62,25 @@ int main(int argc, char *argv[])
             perror("client: socket");
             continue;
         }
+	
+	//Set socket options testing
+        optval = "google.com";
+        err = setsockopt(sockfd, IPPROTO_IP, 85, optval, strnlen(optval, 255));
+        if (err != 0){
+            printf("setsockopt failed with error code %i\n", errno);
+        }
+        else {
+            //Get socket options testing
+            err = getsockopt(sockfd, IPPROTO_IP, 85, optval2, &optlen);
+            if (err != 0){
+                printf("getsockopt failed with error code %i\n", errno);
+            }
+            else {
+                printf("%i\t%s\n", optlen, optval2);
+            }
+        }
+
+	// Attempt connection to server with socket
 	int conRet = connect(sockfd, p->ai_addr, p->ai_addrlen); 
 	printf("%i\n", conRet);
         if (conRet == -1) {
@@ -83,23 +102,6 @@ int main(int argc, char *argv[])
     printf("client: connecting to %s\n", s);
 
     freeaddrinfo(servinfo); // all done with this structure
-
-    //Set socket options testing
-    optval = "google.com";
-    err = setsockopt(sockfd, SOL_SOCKET, 85, optval, strnlen(optval, 255));
-    if (err != 0){
-        printf("setsockopt failed with error code %i\n", err);
-    }
-    else {
-        //Get socket options testing
-        err = getsockopt(sockfd, SOL_SOCKET, 85, optval2, &optlen);
-        if (err != 0){
-            printf("getsockopt failed with error code %i\n", err);
-        }
-        else {
-            printf("%i\t%s\n", optlen, optval2);
-        }
-    }
 
     if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
         perror("recv");

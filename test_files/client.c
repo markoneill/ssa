@@ -35,6 +35,10 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s[INET6_ADDRSTRLEN];
+    char *optval;
+    char *optval2;
+    int  err;
+    int optlen;
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -57,6 +61,24 @@ int main(int argc, char *argv[])
             perror("client: socket");
             continue;
         }
+
+	//Set socket options testing
+        optval = "google.com";
+        err = setsockopt(sockfd, IPPROTO_TCP, 85, optval, strnlen(optval, 255));
+        if (err != 0){
+            printf("setsockopt failed with error code %i\n", errno);
+        }
+        else {
+            //Get socket options testing
+            err = getsockopt(sockfd, IPPROTO_TCP, 85, optval2, &optlen);
+            if (err != 0){
+                printf("getsockopt failed with error code %i\n", errno);
+            }
+            else {
+                printf("%i\t%s\n", optlen, optval2);
+            }
+        }
+
 	int conRet = connect(sockfd, p->ai_addr, p->ai_addrlen);
 	printf("%i\n", conRet);
         if (conRet == -1) {
