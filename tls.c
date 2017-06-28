@@ -178,8 +178,6 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
 
-	printk(KERN_ALERT "host_name registered with socket");
-
 	loc_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		return EINVAL;
@@ -189,10 +187,12 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	}
 	loc_host_name = krealloc(loc_host_name, len, GFP_KERNEL);
 	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
+
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
 	} 
 	else {
+		printk(KERN_ALERT "host_name registered with socket");
 		return  0;
 	}
 	
@@ -207,7 +207,10 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 		return EINVAL;
 	}
 		
-	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
+	if ((m_host_name = tls_sock_ops_get(current->pid, sk)->host_name) == NULL){
+		return EFAULT;
+	}
+
 	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
 	if ((unsigned int) *len < host_name_len){
 		printk(KERN_ALERT "len smaller than requested host_name");
