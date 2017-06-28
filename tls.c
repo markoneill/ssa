@@ -6,6 +6,8 @@
 #include <net/inet_common.h>
 #include <net/sock.h>
 #include <linux/netfilter.h>
+#include <linux/hashtable.h>
+#include <linux/sched.h>
 #include "tls_prot.h"
 
 
@@ -32,6 +34,7 @@ extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
 extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
                         int flags, int *addr_len);
 extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
+extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
 
 /* The TLS protocol structure to be registered */
 static struct inet_protosw tls_stream_protosw = {
@@ -57,11 +60,6 @@ static struct nf_sockopt_ops tls_sockopts = {
 	.owner		= THIS_MODULE
 };
 
-struct sock_host_name {
-	struct sock sk;
-	char *host_name;
-};
-
 /*
  *	Creates a copy of the tcp_prot structure and overrides
  *	posix method's functionality.
@@ -83,6 +81,9 @@ void set_tls_prot(void){
 
 	ref_tcp_sendmsg = tls_prot.sendmsg;
 	tls_prot.sendmsg = tls_sendmsg;
+
+	ref_tcp_v4_init_sock = tls_prot.init;
+	tls_prot.init = tls_v4_init_sock;
 
 	printk(KERN_ALERT "TLS protocols set");
 }
@@ -179,7 +180,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 
 	printk(KERN_ALERT "host_name registered with socket");
 
-	loc_host_name = ((struct sock_host_name *)sk)->host_name;
+	loc_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		return EINVAL;
 	}
@@ -187,7 +188,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		return EINVAL;
 	}
 	loc_host_name = krealloc(loc_host_name, len, GFP_KERNEL);
-	((struct sock_host_name *)sk)->host_name = loc_host_name;
+	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
 	} 
@@ -206,7 +207,7 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 		return EINVAL;
 	}
 		
-	m_host_name = ((struct sock_host_name*)sk)->host_name;
+	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
 	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
 	if ((unsigned int) *len < host_name_len){
 		printk(KERN_ALERT "len smaller than requested host_name");
