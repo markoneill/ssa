@@ -206,8 +206,9 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	if (cmd != TLS_SOCKOPT_GET){
 		return EINVAL;
 	}
-	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name		
+	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
 	if (m_host_name == NULL){
+		printk(KERN_ALERT "Host name requested was NULL");
 		return EFAULT;
 	}
 
