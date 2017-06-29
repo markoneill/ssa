@@ -192,7 +192,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		return EFAULT;
 	} 
 	else {
-		printk(KERN_ALERT "host_name registered with socket");
+		printk(KERN_ALERT "host_name registered with socket\n");
 		return  0;
 	}
 	
@@ -209,17 +209,17 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
 	printk(KERN_ALERT "Host Name: %i\t%s\n",(int)strlen(m_host_name), m_host_name);
 	if (m_host_name == NULL){
-		printk(KERN_ALERT "Host name requested was NULL");
+		printk(KERN_ALERT "Host name requested was NULL\n");
 		return EFAULT;
 	}
 
 	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
 	if ((unsigned int) *len < host_name_len){
-		printk(KERN_ALERT "len smaller than requested host_name");
+		printk(KERN_ALERT "len smaller than requested host_name\n");
 		return EINVAL;	
 	} 
 	if (copy_to_user(user, m_host_name, host_name_len) != 0 ){
-		printk(KERN_ALERT "host_name copy to user failed");
+		printk(KERN_ALERT "host_name copy to user failed\n");
 		return EFAULT;
 	}
 	else {
