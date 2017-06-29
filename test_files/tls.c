@@ -71,6 +71,8 @@ int main(int argc, char *argv[])
         }
         else {
             //Get socket options testing
+            optval2 = malloc(120);
+            optlen = 120;
             err = getsockopt(sockfd, IPPROTO_IP, 85, optval2, &optlen);
             if (err != 0){
                 printf("getsockopt failed with error code %i\n", errno);
