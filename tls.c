@@ -206,7 +206,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	} 
 	else {
 		((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name = loc_host_name;
-		printk(KERN_ALERT "USER INPUT: %s", tls_sock_ops_get(current->pid, sk)->host_name);
+		printk(KERN_ALERT "USER INPUT: %x", tls_sock_ops_get(current->pid, sk)->host_name);
 		printk(KERN_ALERT "host_name registered with socket\n");
 		return  0;
 	}

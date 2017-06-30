@@ -29,5 +29,6 @@ int tls_v4_init_sock(struct sock *sk);
 
 /* Hash Helper functions */
 tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk);
+void tls_prot_init(void);
 
 #endif

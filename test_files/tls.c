@@ -37,8 +37,8 @@ int main(int argc, char *argv[])
     int rv;
     char s[INET6_ADDRSTRLEN];
     int optlen;
-    char *optval;
-    char *optval2;
+    char host_name[] = "google.com";
+    char host_name2[255];
     int err;
 
     if (argc != 2) {
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 	
 	//Set socket options testing
         optval = "google.com";
-        err = setsockopt(sockfd, IPPROTO_IP, 85, optval, strnlen(optval, 255));
+        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, strnlen(host_name, 255));
         if (err != 0){
             printf("setsockopt failed with error code %i\n", errno);
         }
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
             //Get socket options testing
             //optval2 = malloc(255);
             optlen = 255;
-            err = getsockopt(sockfd, IPPROTO_IP, 85, optval2, &optlen);
+            err = getsockopt(sockfd, IPPROTO_IP, 85, host_name2, &optlen);
             if (err != 0){
                 printf("getsockopt failed with error code %i\n", errno);
             }
