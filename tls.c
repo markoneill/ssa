@@ -177,25 +177,39 @@ static void __exit tls_exit(void)
 int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
+	size_t real_input_len;
 
 	loc_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
-		return EINVAL;
+		printk(KERN_ALERT "user input cmd does not match socket option\n");
+		goto einval_out;
 	}
-	if (strnlen((char *)user, MAX_HOST_LEN + 1) > MAX_HOST_LEN){
-		return EINVAL;
+
+	real_input_len = strnlen((char *)user, MAX_HOST_LEN + 1);
+	if (real_input_len > MAX_HOST_LEN){
+		printk(KERN_ALERT "user input host_name too long\n");
+		goto einval_out;
 	}
+
+	if (((unsigned int)real_input_len) != len){
+		printk(KERN_ALERT "user input host_name length does not match user input len\n");
+		goto einval_out;
+	}
+
 	loc_host_name = krealloc(loc_host_name, len, GFP_KERNEL);
-	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
 
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
 	} 
 	else {
+		tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
 		printk(KERN_ALERT "host_name registered with socket\n");
 		return  0;
 	}
-	
+
+einval_out:
+	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOP. HOST NAME HAS NOT BEEN SET\n");
+	return EINVAL;	
 }
 
 int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
