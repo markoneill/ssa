@@ -179,7 +179,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	char *loc_host_name;
 	size_t real_input_len;
 
-	loc_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
+	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		printk(KERN_ALERT "user input cmd does not match socket option\n");
 		goto einval_out;
@@ -202,7 +202,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		return EFAULT;
 	} 
 	else {
-		tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
+		((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name = loc_host_name;
 		printk(KERN_ALERT "USER INPUT: %s", tls_sock_ops_get(current->pid, sk)->host_name);
 		printk(KERN_ALERT "host_name registered with socket\n");
 		return  0;
@@ -221,7 +221,7 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	if (cmd != TLS_SOCKOPT_GET){
 		return EINVAL;
 	}
-	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
+	m_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;		
 	printk(KERN_ALERT "Host Name Size: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
 	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	if (m_host_name == NULL){
