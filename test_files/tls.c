@@ -64,7 +64,6 @@ int main(int argc, char *argv[])
         }
 	
 	//Set socket options testing
-        optval = "google.com";
         err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, strnlen(host_name, 255));
         if (err != 0){
             printf("setsockopt failed with error code %i\n", errno);
@@ -78,7 +77,7 @@ int main(int argc, char *argv[])
                 printf("getsockopt failed with error code %i\n", errno);
             }
             else {
-                printf("%i\t%s\n", optlen, optval2);
+                printf("%i\t%s\n", optlen, host_name2);
             }
         }
 

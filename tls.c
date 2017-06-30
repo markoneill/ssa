@@ -204,12 +204,13 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
 	} 
-	else {
-		((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name = loc_host_name;
-		printk(KERN_ALERT "USER INPUT: %x", tls_sock_ops_get(current->pid, sk)->host_name);
-		printk(KERN_ALERT "host_name registered with socket\n");
-		return  0;
-	}
+
+	loc_host_name[len] = '\0';	
+
+	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
+	printk(KERN_ALERT "USER INPUT: %s", tls_sock_ops_get(current->pid, sk)->host_name);
+	printk(KERN_ALERT "host_name registered with socket\n");
+	return  0;
 
 einval_out:
 	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOP. HOST NAME HAS NOT BEEN SET\n");
