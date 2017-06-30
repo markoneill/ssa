@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
         }
         else {
             //Get socket options testing
-            optval2 = malloc(255);
+            //optval2 = malloc(255);
             optlen = 255;
             err = getsockopt(sockfd, IPPROTO_IP, 85, optval2, &optlen);
             if (err != 0){
