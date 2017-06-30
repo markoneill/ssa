@@ -199,7 +199,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		goto einval_out;
 	}
 
-	loc_host_name = krealloc(loc_host_name, len, GFP_KERNEL);
+	loc_host_name = krealloc(loc_host_name, len + 1, GFP_KERNEL);
 
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
@@ -225,20 +225,19 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	if (cmd != TLS_SOCKOPT_GET){
 		return EINVAL;
 	}
-	m_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;		
-	printk(KERN_ALERT "Host Name Size: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
+	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
+	printk(KERN_ALERT "Host Name: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
 	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	if (m_host_name == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
 		return EFAULT;
 	}
-	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
-	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
+	host_name_len = strnlen(m_host_name, MAX_HOST_LEN) + 1;
 	if ((unsigned int) *len < host_name_len){
 		printk(KERN_ALERT "len smaller than requested host_name\n");
 		return EINVAL;	
 	} 
-	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
+	/* Check ownership of pointer and FS thingy */
 	if (copy_to_user(user, m_host_name, host_name_len) != 0 ){
 		printk(KERN_ALERT "host_name copy to user failed\n");
 		return EFAULT;
