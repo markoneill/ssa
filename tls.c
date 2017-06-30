@@ -242,9 +242,9 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 		printk(KERN_ALERT "host_name copy to user failed\n");
 		return EFAULT;
 	}
-	else {
-		return 0;
-	}
+	
+	*len = (int)host_name_len - 1;
+	return 0;
 }
 
 module_init(tls_init);
