@@ -208,16 +208,18 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	}
 	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
 	printk(KERN_ALERT "Host Name: %i\t%s\n",(int)strlen(m_host_name), m_host_name);
+	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	if (m_host_name == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
 		return EFAULT;
 	}
-
+	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	host_name_len = strnlen(m_host_name, MAX_HOST_LEN);
 	if ((unsigned int) *len < host_name_len){
 		printk(KERN_ALERT "len smaller than requested host_name\n");
 		return EINVAL;	
 	} 
+	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	if (copy_to_user(user, m_host_name, host_name_len) != 0 ){
 		printk(KERN_ALERT "host_name copy to user failed\n");
 		return EFAULT;
