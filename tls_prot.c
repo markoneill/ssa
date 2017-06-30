@@ -78,3 +78,7 @@ tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk){
 	}
 	return sock_op;
 }
+
+void tls_prot_init(){
+	hash_init(sock_ops_table);
+}

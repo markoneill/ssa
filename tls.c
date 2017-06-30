@@ -104,6 +104,9 @@ static int __init tls_init(void)
 	unsigned long kallsyms_err;
 
 	printk(KERN_ALERT "Initializing TLS module\n");
+	
+	/* initialize tls_prot hash table */
+	tls_prot_init();
 
 	/* register the tls socket options */
 	register_sockopts();
