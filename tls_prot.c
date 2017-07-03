@@ -1,3 +1,8 @@
+/*
+ * Overrides the TCP functions to give the TLS functionality. Also contains functions manage
+ * the hash table where TLS socket options are stored.
+ */
+
 #include "tls_prot.h"
 
 #define HASH_TABLE_BITSIZE	9

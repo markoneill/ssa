@@ -41,8 +41,8 @@ int main(int argc, char *argv[])
     char host_name2[255];
     int err;
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: client hostname\n");
+    if (argc != 4) {
+        fprintf(stderr,"usage: client hostname host_name len(host_name)\n");
         exit(1);
     }
 
@@ -64,27 +64,29 @@ int main(int argc, char *argv[])
         }
 	
 	//Set socket options testing
-//        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, strnlen(host_name, 255));
-        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, -1000);
+        err = setsockopt(sockfd, IPPROTO_IP, 85, argv[2], atoi(argv[3]));
+	printf("len = %i: ", atoi(argv[3]));
         if (err != 0){
-            printf("setsockopt failed with error code %i\n", errno);
+            printf("%i\n", err);
         }
-        else {
-            //Get socket options testing
-            //optval2 = malloc(255);
-            optlen = 255;
-            err = getsockopt(sockfd, IPPROTO_IP, 85, host_name2, &optlen);
-            if (err != 0){
-                printf("getsockopt failed with error code %i\n", errno);
-            }
-            else {
-                printf("%i\t%s\n", optlen, host_name2);
-            }
-        }
+	else {
+		printf("0\n");
+	}
+//        else {
+//            //Get socket options testing
+//            //optval2 = malloc(255);
+//            optlen = 255;
+//            err = getsockopt(sockfd, IPPROTO_IP, 85, host_name2, &optlen);
+//            if (err != 0){
+//                printf("getsockopt failed with error code %i\n", errno);
+//            }
+//            else {
+//                printf("%i\t%s\n", optlen, host_name2);
+//            }
+//        }
 
 	// Attempt connection to server with socket
 	int conRet = connect(sockfd, p->ai_addr, p->ai_addrlen); 
-	printf("%i\n", conRet);
         if (conRet == -1) {
             close(sockfd);
             perror("client: connect");
@@ -101,8 +103,6 @@ int main(int argc, char *argv[])
 
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
             s, sizeof s);
-    printf("client: connecting to %s\n", s);
-
     freeaddrinfo(servinfo); // all done with this structure
 
     if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
@@ -111,8 +111,6 @@ int main(int argc, char *argv[])
     }
 
     buf[numbytes] = '\0';
-
-    printf("client: received '%s'\n",buf);
 
     close(sockfd);
 

@@ -1,3 +1,9 @@
+/*
+ * A loadable kernel module that completes all registrations necessary to give TLS functionality
+ * to the POSIX socket API call. Also registers the socket option functions to set and get the
+ * host name for TLS to use.
+ */
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/kallsyms.h>
@@ -46,7 +52,7 @@ static struct inet_protosw tls_stream_protosw = {
 };
 
 
-/* Defines the socket options to specify a URL for TLS protocol */
+/* Defines the socket options to specify a host name for TLS protocol */
 int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len);
 int get_host_name(struct sock *sk, int cmd, void __user *user, int *len);
 static struct nf_sockopt_ops tls_sockopts = {
@@ -181,7 +187,6 @@ static void __exit tls_exit(void)
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
 
-
 int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
@@ -213,8 +218,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	loc_host_name[len] = '\0';	
 
 	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
-	printk(KERN_ALERT "USER INPUT: %s", tls_sock_ops_get(current->pid, sk)->host_name);
-	printk(KERN_ALERT "host_name registered with socket\n");
+	printk(KERN_ALERT "host_name registered with socket: %s\n", loc_host_name);
 	return  0;
 
 einval_out:
@@ -232,7 +236,6 @@ int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
 	}
 	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
 	printk(KERN_ALERT "Host Name: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
-	printk(KERN_ALERT "DEBUG: %s\t%d \n", __FUNCTION__, __LINE__);
 	if (m_host_name == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
 		return EFAULT;

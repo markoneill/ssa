@@ -1,0 +1,77 @@
+import socket
+import sys
+import subprocess
+from random import randint
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def print_pass_fail(status):
+	if status:
+		print (bcolors.OKBLUE + "\tPassed!" + bcolors.ENDC)
+	else:
+		print (bcolors.FAIL + "\tFailed..." + bcolors.ENDC)
+	
+
+def gen_host_name_by_len(size):
+	hn = ''
+	for j in range(size):
+		hn += chr(randint(97,122))
+	return hn
+
+def host_name_len_eval(length, output):
+	err_code = int(output.split(' ')[-1])
+	if length >= 0 and length <= 255:
+		if err_code == 0:
+			return True
+		if err_code != 0:
+			return False
+	if length < 0 or length > 255:
+		if err_code == 0:
+			return False
+		if err_code != 0:
+			return True 
+
+with open("set_test_out.txt", 'w') as outfile:
+
+	# start host_name standard charset input test
+	print("Starting standard charset test:"),
+	sys.stdout.flush()
+	pass_std_charset_test = True
+	for i in range(32, 126 + 1): # +1 to include 126
+		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
+		if int(p.stdout.read().split()[-1]) != 0:
+			pass_std_charset_test = False
+			break
+	print_pass_fail(pass_std_charset_test)
+
+	# start host_name extended charset input test
+	print("Starting extended charset test:"),
+        sys.stdout.flush()
+        pass_ext_charset_test = True
+        for i in range(128, 255 + 1): # +1 to include 255
+                p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
+                if int(p.stdout.read().split()[-1]) != 0:
+                        pass_ext_charset_test = False
+                        break
+        print_pass_fail(pass_ext_charset_test)
+	
+	# start host_name length test
+	print("Starting Host Name Length Test:\t"),
+	sys.stdout.flush()
+	pass_len_test = True
+	for i in range (-1000, 1000):
+		hn = gen_host_name_by_len(i)
+#		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', hn, str(i)], stdout=subprocess.PIPE)
+#		if host_name_len_eval(i, p.stdout.read()) == False:
+#			pass_len_test = False
+#			break	
+	print_pass_fail(pass_len_test)
+

@@ -11,3 +11,4 @@ test_files/*make
 modules.order
 .tmp_versions/*
 *.swp
+*.txt
