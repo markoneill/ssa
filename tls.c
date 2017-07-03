@@ -42,7 +42,7 @@ static struct inet_protosw tls_stream_protosw = {
 	.protocol	= IPPROTO_TLS,
 	.prot		= &tls_prot,
 	.ops		= &inet_stream_ops,
-	.flags 		= INET_PROTOSW_PERMANENT | INET_PROTOSW_ICSK
+	.flags 		= INET_PROTOSW_ICSK
 };
 
 
