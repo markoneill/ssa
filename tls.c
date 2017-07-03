@@ -97,6 +97,10 @@ void register_sockopts(void){
 	}
 }
 
+void inline unregister_sockopts(void){
+	nf_unregister_sockopt(&tls_sockopts);
+}
+
 static int __init tls_init(void)
 {
 	int err;	
@@ -173,6 +177,7 @@ static void __exit tls_exit(void)
 	tls_prot.twsk_prot = NULL;
 
 	proto_unregister(&tls_prot);
+	unregister_sockopts();
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
 
