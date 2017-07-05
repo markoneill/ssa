@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
     char host_name[] = "google.com";
     char host_name2[255];
     int err;
+    int breaker;
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -65,7 +66,8 @@ int main(int argc, char *argv[])
 	
 	//Set socket options testing
 //        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, strnlen(host_name, 255));
-        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, -1000);
+        breaker = 17;
+        err = setsockopt(sockfd, IPPROTO_IP, 85, breaker, 10);
         if (err != 0){
             printf("setsockopt failed with error code %i\n", errno);
         }
