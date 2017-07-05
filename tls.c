@@ -194,6 +194,7 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	size_t real_input_len;
 
 	if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)){
+		printk(KERN_ALERT "failed ns_capable check - user namespace not permitted\n");
 		return EPERM;
 	}
 

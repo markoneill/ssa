@@ -22,6 +22,7 @@ def print_pass_fail(status):
 
 def gen_host_name_by_len(size):
 	hn = ''
+	if size < 1: return hn
 	for j in range(size):
 		hn += chr(randint(97,122))
 	return hn

@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
     char host_name2[255];
     int err;
     int breaker;
+    char *breaker2 = "www.google.com";
 
     if (argc != 2) {
         fprintf(stderr,"usage: client hostname\n");
@@ -67,9 +68,9 @@ int main(int argc, char *argv[])
 	//Set socket options testing
 //        err = setsockopt(sockfd, IPPROTO_IP, 85, host_name, strnlen(host_name, 255));
         breaker = 17;
-        err = setsockopt(sockfd, IPPROTO_IP, 85, breaker, 10);
+        err = setsockopt(sockfd, IPPROTO_IP, 85, breaker, sizeof(int));
         if (err != 0){
-            printf("setsockopt failed with error code %i\n", errno);
+            printf("setsockopt failed with error code %i\n", err);
         }
         else {
             //Get socket options testing
@@ -77,7 +78,7 @@ int main(int argc, char *argv[])
             optlen = 255;
             err = getsockopt(sockfd, IPPROTO_IP, 85, host_name2, &optlen);
             if (err != 0){
-                printf("getsockopt failed with error code %i\n", errno);
+                printf("getsockopt failed with error code %i\n", err);
             }
             else {
                 printf("%i\t%s\n", optlen, host_name2);
@@ -86,7 +87,6 @@ int main(int argc, char *argv[])
 
 	// Attempt connection to server with socket
 	int conRet = connect(sockfd, p->ai_addr, p->ai_addrlen); 
-	printf("%i\n", conRet);
         if (conRet == -1) {
             close(sockfd);
             perror("client: connect");
