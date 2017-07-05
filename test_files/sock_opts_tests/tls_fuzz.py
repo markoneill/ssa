@@ -81,7 +81,7 @@ def host_name_length_test():
 	print("Starting host name length test:\t"),
 	sys.stdout.flush()
 	pass_len_test = True
-	for i in range (-1000, 0):
+	for i in range (-1000, 1000):
 		hn = gen_host_name_by_len(i)
 		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', hn, str(i)], stdout=subprocess.PIPE)
 		if not host_name_len_eval(i, p.stdout.read()):
