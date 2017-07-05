@@ -14,6 +14,7 @@
 #include <linux/netfilter.h>
 #include <linux/hashtable.h>
 #include <linux/sched.h>
+#include <linux/capability.h>
 #include "tls_prot.h"
 
 
@@ -191,6 +192,10 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
 	size_t real_input_len;
+
+	if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)){
+		return EPERM;
+	}
 
 	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 	if (cmd != TLS_SOCKOPT_SET){

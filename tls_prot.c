@@ -20,7 +20,6 @@ int (*ref_tcp_v4_init_sock)(struct sock *sk);
 
 /* Overriden TLS .connect function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	printk(KERN_ALERT "Attempting tls connect");
 	return (*ref_tcp_connect)(sk, uaddr, addr_len);
 }
 
