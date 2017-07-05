@@ -39,39 +39,64 @@ def host_name_len_eval(length, output):
 		if err_code != 0:
 			return True 
 
-with open("set_test_out.txt", 'w') as outfile:
+def mismatched_eval(input_length, actual_length, output):
+	err_code = int(output.split(' ')[-1])
+	if input_length == actual_length:
+		if err_code == 0:
+			return True
+		else:
+			return False
+	else:
+		if err_code == 0:
+			return False
+		else:
+			return True
 
-	# start host_name standard charset input test
-	print("Starting standard charset test:"),
-	sys.stdout.flush()
-	pass_std_charset_test = True
-	for i in range(32, 126 + 1): # +1 to include 126
-		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
-		if int(p.stdout.read().split()[-1]) != 0:
-			pass_std_charset_test = False
-			break
-	print_pass_fail(pass_std_charset_test)
+#---------------------------------- START TESTS ----------------------------------------#
 
-	# start host_name extended charset input test
-	print("Starting extended charset test:"),
-        sys.stdout.flush()
-        pass_ext_charset_test = True
-        for i in range(128, 255 + 1): # +1 to include 255
-                p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
-                if int(p.stdout.read().split()[-1]) != 0:
-                        pass_ext_charset_test = False
-                        break
-        print_pass_fail(pass_ext_charset_test)
-	
-	# start host_name length test
-	print("Starting Host Name Length Test:\t"),
-	sys.stdout.flush()
-	pass_len_test = True
-	for i in range (-1000, 1000):
-		hn = gen_host_name_by_len(i)
-#		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', hn, str(i)], stdout=subprocess.PIPE)
-#		if host_name_len_eval(i, p.stdout.read()) == False:
-#			pass_len_test = False
-#			break	
-	print_pass_fail(pass_len_test)
+# start host_name standard charset input test
+print("Starting standard charset test:"),
+sys.stdout.flush()
+pass_std_charset_test = True
+for i in range(32, 126 + 1): # +1 to include 126
+	p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
+	if int(p.stdout.read().split()[-1]) != 0:
+		pass_std_charset_test = False
+		break
+print_pass_fail(pass_std_charset_test)
 
+# start host_name extended charset input test
+print("Starting extended charset test:"),
+sys.stdout.flush()
+pass_ext_charset_test = True
+for i in range(128, 255 + 1): # +1 to include 255
+	p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
+	if int(p.stdout.read().split()[-1]) != 0:
+		pass_ext_charset_test = False
+		break
+print_pass_fail(pass_ext_charset_test)
+
+# start host_name length test
+print("Starting host name length test:\t"),
+sys.stdout.flush()
+pass_len_test = True
+for i in range (-1000, 1000):
+	hn = gen_host_name_by_len(i)
+	p = subprocess.Popen(['./tls_set_fuzz', 'localhost', hn, str(i)], stdout=subprocess.PIPE)
+	if not host_name_len_eval(i, p.stdout.read()):
+		pass_len_test = False
+		break	
+print_pass_fail(pass_len_test)
+
+# start mismatched length test
+print("Starting mismatched length test:"),
+sys.stdout.flush()
+pass_mismatched_len = True
+for i in range (-1000, 1000):
+	hn = "www.google.com"
+	p = subprocess.Popen(['./tls_set_fuzz', 'localhost', hn, str(i)], stdout=subprocess.PIPE)	
+	if not mismatched_eval(i, len(hn), p.stdout.read()):
+		pass_mismatched_len = False
+		break
+print_pass_fail(pass_mismatched_len)
+ 
