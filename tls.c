@@ -95,6 +95,22 @@ void set_tls_prot(void){
 	printk(KERN_ALERT "TLS protocols set");
 }
 
+int test_string(void *input){
+        int str_len;
+        printf("%s\n", (char*)input);
+        str_len = strnlen((char *)input, 255);
+        for (unsigned int i = 0; i < str_len; i++){
+                int c = (int)(*((char*)input));
+                if ( (c >= 48 && c <=57) || c == 45 || c == 46 || (c >= 65 && c <= 90) || (c >= 97 && c <= 122)){
+			input++;
+                        continue;
+                }
+		return 0;
+        }
+        return 1;
+}
+
+
 void register_sockopts(void){
 	int err;
 	
@@ -193,11 +209,6 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	char *loc_host_name;
 	size_t real_input_len;
 
-	if (!ns_capable(sock_net(sk)->user_ns, CAP_NET_ADMIN)){
-		printk(KERN_ALERT "failed ns_capable check - user namespace not permitted\n");
-		return EPERM;
-	}
-
 	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		printk(KERN_ALERT "user input cmd does not match socket option\n");
@@ -212,6 +223,11 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 
 	if (((unsigned int)real_input_len) != len){
 		printk(KERN_ALERT "user input host_name length does not match user input len\n");
+		goto einval_out;
+	}
+
+	if (test_string(char *user)){
+		printk(KERN_ALERT "user input is invalid hostname\n"):
 		goto einval_out;
 	}
 
