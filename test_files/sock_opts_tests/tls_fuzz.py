@@ -53,6 +53,11 @@ def mismatched_eval(input_length, actual_length, output):
 		else:
 			return True
 
+def valid_char_eval(c):
+	if ((c >= 48 and c <=57) or c == 45 or c == 46 or (c >= 65 and c <= 90) or (c >= 97 and c <= 122)):
+		return True
+	return False
+
 def std_charset_test():
 	# start host_name standard charset input test
 	print("Starting standard charset test:"),
@@ -60,7 +65,9 @@ def std_charset_test():
 	pass_std_charset_test = True
 	for i in range(32, 126 + 1): # +1 to include 126
 		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
-		if int(p.stdout.read().split()[-1]) != 0:
+		a = int(p.stdout.read().split()[-1]) 
+		b = valid_char_eval(i)
+		if ((a == 0 and not b) or (a != 0 and b)):
 			pass_std_charset_test = False
 			break
 	print_pass_fail(pass_std_charset_test)
@@ -72,7 +79,7 @@ def ext_charset_test():
 	pass_ext_charset_test = True
 	for i in range(128, 255 + 1): # +1 to include 255
 		p = subprocess.Popen(['./tls_set_fuzz', 'localhost', chr(i), '1'], stdout=subprocess.PIPE)
-		if int(p.stdout.read().split()[-1]) != 0:
+		if int(p.stdout.read().split()[-1]) == 0:
 			pass_ext_charset_test = False
 			break
 	print_pass_fail(pass_ext_charset_test)

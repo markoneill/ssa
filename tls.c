@@ -95,11 +95,16 @@ void set_tls_prot(void){
 	printk(KERN_ALERT "TLS protocols set");
 }
 
-int test_string(void *input){
+/* 
+ * Tests whether a socket option input contains only valid host name characters
+ * @param	input - The void *user that was passed to setsockops
+ * @return	1 if string is valid. Otherwise 0.
+ */
+int is_valid_test_string(void *input){
         int str_len;
-        printf("%s\n", (char*)input);
+	unsigned int i;
         str_len = strnlen((char *)input, 255);
-        for (unsigned int i = 0; i < str_len; i++){
+        for (i = 0; i < str_len; i++){
                 int c = (int)(*((char*)input));
                 if ( (c >= 48 && c <=57) || c == 45 || c == 46 || (c >= 65 && c <= 90) || (c >= 97 && c <= 122)){
 			input++;
@@ -110,7 +115,7 @@ int test_string(void *input){
         return 1;
 }
 
-
+/* Registers all socket options for TLS functionality */
 void register_sockopts(void){
 	int err;
 	
@@ -120,6 +125,7 @@ void register_sockopts(void){
 	}
 }
 
+/* Unregisters the socket options for TLS */
 void inline unregister_sockopts(void){
 	nf_unregister_sockopt(&tls_sockopts);
 }
@@ -209,6 +215,15 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	char *loc_host_name;
 	size_t real_input_len;
 
+	if (user == NULL){
+		printk(KERN_ALERT "user input is NULL");
+		goto einval_out;
+	}
+
+	if (len == 0){
+		printk(KERN_ALERT "user input length is less than zero");
+	}
+
 	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		printk(KERN_ALERT "user input cmd does not match socket option\n");
@@ -226,8 +241,8 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		goto einval_out;
 	}
 
-	if (test_string(char *user)){
-		printk(KERN_ALERT "user input is invalid hostname\n"):
+	if (!is_valid_test_string(user)){
+		printk(KERN_ALERT "user input is invalid hostname\n");
 		goto einval_out;
 	}
 
