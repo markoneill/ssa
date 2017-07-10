@@ -213,15 +213,15 @@ static void __exit tls_exit(void)
 int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 {
 	char *loc_host_name;
-	size_t real_input_len;
 
 	if (user == NULL){
 		printk(KERN_ALERT "user input is NULL");
 		goto einval_out;
 	}
 
-	if (len == 0){
-		printk(KERN_ALERT "user input length is less than zero");
+	if (unlikely(!access_ok(VERIFY_WRITE, user, len))){
+		printk(KERN_ALERT "invalid memory address for pointer user");
+		return EFAULT;
 	}
 
 	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
@@ -230,15 +230,9 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		goto einval_out;
 	}
 
-	real_input_len = strnlen((char *)user, MAX_HOST_LEN + 1);
-	if (real_input_len > MAX_HOST_LEN){
-		printk(KERN_ALERT "user input host_name too long\n");
-		goto einval_out;
-	}
-
-	if (((unsigned int)real_input_len) != len){
-		printk(KERN_ALERT "user input host_name length does not match user input len\n");
-		goto einval_out;
+	if (len > MAX_HOST_LEN){
+		printk(KERN_ALERT "user input host_name too long, cutting to 255\n");
+		len = MAX_HOST_LEN;
 	}
 
 	if (!is_valid_test_string(user)){
