@@ -219,11 +219,6 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 		goto einval_out;
 	}
 
-	if (unlikely(!access_ok(VERIFY_WRITE, user, len))){
-		printk(KERN_ALERT "invalid memory address for pointer user");
-		return EFAULT;
-	}
-
 	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 	if (cmd != TLS_SOCKOPT_SET){
 		printk(KERN_ALERT "user input cmd does not match socket option\n");
@@ -233,20 +228,21 @@ int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	if (len > MAX_HOST_LEN){
 		printk(KERN_ALERT "user input host_name too long, cutting to 255\n");
 		len = MAX_HOST_LEN;
-	}
-
-	if (!is_valid_test_string(user)){
-		printk(KERN_ALERT "user input is invalid hostname\n");
-		goto einval_out;
-	}
+	}	
 
 	loc_host_name = krealloc(loc_host_name, len + 1, GFP_KERNEL);
 
 	if (copy_from_user(loc_host_name, user, len) != 0){
 		return EFAULT;
-	} 
-
+	}
+ 
 	loc_host_name[len] = '\0';	
+
+	if (!is_valid_test_string(user)){
+		kfree(loc_host_name);
+		printk(KERN_ALERT "user input is invalid hostname\n");
+		goto einval_out;
+	}
 
 	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
 	printk(KERN_ALERT "host_name registered with socket: %s\n", loc_host_name);
