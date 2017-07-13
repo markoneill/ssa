@@ -20,6 +20,7 @@ typedef struct tls_sock_ops {
 
 /* Corresponding TLS override functions */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int tls_disconnect(struct sock *sk, int flags);
 void tls_shutdown(struct sock *sk, int how);
 int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,

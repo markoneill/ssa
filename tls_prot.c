@@ -6,11 +6,14 @@
 #include "tls_prot.h"
 
 #define HASH_TABLE_BITSIZE	9
+#define REROUTE_PORT		8443
+
 static DEFINE_HASHTABLE(sock_ops_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(sock_ops_lock);
 
 /* Original TCP reference functions */
-int (*ref_tcp_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int (*ref_tcp_disconnect)(struct sock *sk, int flags);
 void (*ref_tcp_shutdown)(struct sock *sk, int how);
 int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
@@ -18,9 +21,21 @@ int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonb
 int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 int (*ref_tcp_v4_init_sock)(struct sock *sk);
 
-/* Overriden TLS .connect function */
+struct sockaddr_in reroute_addr = {
+	.sin_family = AF_INET,
+	.sin_port = htons(REROUTE_PORT),
+	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+};
+
+/* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	return (*ref_tcp_connect)(sk, uaddr, addr_len);
+	printk(KERN_ALERT "Address: %s", uaddr->sa_data);
+	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), addr_len);
+}
+
+/* Overriden TLS .connect for v6 function */
+int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
+	return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
 }
 
 /* Overriden TLS .disconnect function */

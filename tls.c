@@ -14,6 +14,7 @@
 #include <linux/netfilter.h>
 #include <linux/hashtable.h>
 #include <linux/sched.h>
+#include <linux/in.h>
 #include <linux/capability.h>
 #include "tls_prot.h"
 
@@ -32,10 +33,12 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 
 static struct proto tls_prot;
+static struct proto tcpv6_prot;
 static struct net_protocol ipprot;
 
 /* Original TCP reference functions */
-extern int (*ref_tcp_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+extern int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 extern int (*ref_tcp_disconnect)(struct sock *sk, int flags);
 extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
 extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
@@ -71,11 +74,24 @@ static struct nf_sockopt_ops tls_sockopts = {
  *	Creates a copy of the tcp_prot structure and overrides
  *	posix method's functionality.
  */
-void set_tls_prot(void){
-	tls_prot = tcp_prot;
+int set_tls_prot(void){
 
-	ref_tcp_connect = tls_prot.connect;
+	unsigned long kallsyms_err;
+
+	kallsyms_err = kallsyms_lookup_name("tcpv6_prot");
+	if (kallsyms_err == 0){
+        	printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcpv6_prot address\n");
+		return -1;
+        }
+
+	tls_prot = tcp_prot;
+	tcpv6_prot = *(struct proto *)kallsyms_err;
+
+	ref_tcp_v4_connect = tls_prot.connect;
 	tls_prot.connect = tls_v4_connect;
+
+	ref_tcp_v6_connect = tcpv6_prot.connect;
+	tcpv6_prot.connect = tls_v6_connect;
 
 	ref_tcp_disconnect = tls_prot.disconnect;
 	tls_prot.disconnect = tls_disconnect;
@@ -93,6 +109,7 @@ void set_tls_prot(void){
 	tls_prot.init = tls_v4_init_sock;
 
 	printk(KERN_ALERT "TLS protocols set");
+	return 0;
 }
 
 /* 
@@ -145,7 +162,11 @@ static int __init tls_init(void)
 	register_sockopts();
 	
 	/* Establish and register the tls_prot structure */
-	set_tls_prot();
+	err = set_tls_prot();
+	if (err != 0){
+		goto out;
+	}
+
 	err = proto_register(&tls_prot, 1);
 
 	if (err == 0){
