@@ -5,11 +5,7 @@
 
 #include "tls_prot_tor.h"
 
-#define HASH_TABLE_BITSIZE	9
 #define REROUTE_PORT		9050
-
-static DEFINE_HASHTABLE(sock_ops_table, HASH_TABLE_BITSIZE);
-static DEFINE_SPINLOCK(sock_ops_lock);
 
 /* Original TCP reference functions */
 int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -60,7 +56,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	hdr_out.msg_controllen = 0;
 	hdr_out.msg_iocb = NULL;
 
-	ref_tcp_sendmsg(sk, &hdr_out, buf_len);
+	(*ref_tcp_sendmsg)(sk, &hdr_out, buf_len);
 
 	/* --------------- Recieve message from TOR ---------------------- */
 
@@ -89,6 +85,10 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 /* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	int err;
+	
+	if (strstr(current->comm, "tor") != NULL){
+		return (*ref_tcp_v4_connect)(sk, uaddr, addr_len);
+	}
 
 	err = (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), addr_len);
 	if (err != 0){
@@ -112,10 +112,6 @@ int tls_disconnect(struct sock *sk, int flags){
 
 /* Overriden TLS .shutdown function */
 void tls_shutdown(struct sock *sk, int how){
-	tls_sock_ops* to_free = tls_sock_ops_get(current->pid, sk);
-	if (to_free != NULL){
-		kfree(to_free);
-	}	
 	(*ref_tcp_shutdown)(sk, how);
 }
 
@@ -132,39 +128,5 @@ int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
 
 /* Overriden TLS .init function */
 int tls_v4_init_sock(struct sock *sk){
-	tls_sock_ops* new_sock_op;
-	if ((new_sock_op = kmalloc(sizeof(struct tls_sock_ops), GFP_KERNEL)) == NULL){
-		printk(KERN_ALERT "kmalloc failed when creating tls_sock_ops");
-		return -1;
-	}
-	new_sock_op->host_name = NULL;
-	new_sock_op->pid = current->pid;
-	new_sock_op->sk = sk;
-	new_sock_op->key = new_sock_op->pid ^ (unsigned long)sk;
-	spin_lock(&sock_ops_lock);
-	hash_add(sock_ops_table, &new_sock_op->hash, new_sock_op->key);
-	spin_unlock(&sock_ops_lock);
 	return (*ref_tcp_v4_init_sock)(sk);
-}
-
-/**
- * Finds a socket option in the hash table
- * @param	pid - The desired socket options Process ID
- * @param	sk - A pointer to the sock struct related to the socket option
- * @return	The desired socket options if found. If not found, returns NULL
- */
-tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk){
-	tls_sock_ops* sock_op = NULL;
-	tls_sock_ops* sock_op_it;
-	hash_for_each_possible(sock_ops_table, sock_op_it, hash, pid ^ (unsigned long)sk){
-		if (sock_op_it->pid == pid && sock_op_it->sk == sk){
-			sock_op = sock_op_it;
-			break;
-		}
-	}
-	return sock_op;
-}
-
-void tls_prot_init(){
-	hash_init(sock_ops_table);
 }

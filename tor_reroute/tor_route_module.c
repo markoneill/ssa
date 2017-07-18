@@ -99,9 +99,6 @@ static int __init tor_reroute_init(void)
 
 	printk(KERN_ALERT "Initializing TLS module\n");
 	
-	/* initialize tls_prot hash table */
-	tls_prot_init();
-
 	/* Override functionality in the tcp_prot structure */
 	err = set_tcp_prot();
 	if (err != 0){
