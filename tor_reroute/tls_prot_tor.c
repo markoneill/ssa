@@ -55,14 +55,16 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	iov_out.iov_base = outgoing;
 	iov_out.iov_len = buf_len;
 	iov_iter_kvec(&hdr_out.msg_iter, WRITE | ITER_KVEC, &iov_out, 1, buf_len);
+	hdr_out.name = NULL;
 	hdr_out.msg_namelen = 0;
 	hdr_out.msg_flags = 0;
 	hdr_out.msg_control = NULL;
 	hdr_out.msg_controllen = 0;
 	hdr_out.msg_iocb = NULL;
 
+	release_sock(sk);
 	(*ref_tcp_sendmsg)(sk, &hdr_out, buf_len);
-
+	lock_sock(sk);
 	/* --------------- Recieve message from TOR ---------------------- */
 
 	in_buf = kmalloc(2, GFP_KERNEL);
@@ -76,7 +78,9 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	iov_iter_kvec(&hdr_in.msg_iter, READ | ITER_KVEC, &iov_in, 1, 2);
 	
 	addr_len_in = 0;
+	release_sock(sk);
 	ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
+	lock_sock(sk);
 	set_fs(old_fs);
 
 	if (in_buf[0] == 0x05 && in_buf[1] == 0x00){
