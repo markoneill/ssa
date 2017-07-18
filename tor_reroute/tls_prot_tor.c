@@ -3,6 +3,7 @@
  * the hash table where TLS socket options are stored.
  */
 
+#include <linux/slab.h>
 #include "tls_prot_tor.h"
 
 #define REROUTE_PORT		9050
@@ -36,6 +37,10 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	struct kvec iov_out;
 	struct kvec iov_in;
 	int addr_len_in;
+	mm_segment_t old_fs;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
 
 	buf_len = 3;	
 
@@ -62,6 +67,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 
 	in_buf = kmalloc(2, GFP_KERNEL);
 	if (!in_buf){
+		set_fs(old_fs);
 		return -ENOMEM;
 	}
 	
@@ -71,6 +77,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	
 	addr_len_in = 0;
 	ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
+	set_fs(old_fs);
 
 	if (in_buf[0] == 0x05 && in_buf[1] == 0x00){
 		printk(KERN_ALERT "Initial Socks5 Handshake successful");
