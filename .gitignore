@@ -5,6 +5,7 @@
 *.ko
 *.pyc
 *.mod.c
+*.mod
 *.db
 Module.symvers
 test_files/*make
