@@ -97,9 +97,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
 	lock_sock(sk);
 
-	if (in_buf[0] == 0x05 && in_buf[1] == 0x00){
-		printk(KERN_ALERT "Initial Socks5 Handshake successful");
-	} else {
+	if (in_buf[0] != 0x05 || in_buf[1] != 0x00){
 		printk(KERN_ALERT "Initial Socks5 Handshake failed");
 		set_fs(old_fs);
 		return -1;
@@ -143,7 +141,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 
 	iov_in_host.iov_base = in_buf_host;
 	iov_in_host.iov_len = buf_len_host;
-	iov_iter_kvec(&hdr_in.msg_iter, READ | ITER_KVEC, &iov_in, 1, buf_len_host);
+	iov_iter_kvec(&hdr_in.msg_iter, READ | ITER_KVEC, &iov_in_host, 1, buf_len_host);
 
 	addr_len_in_host = 0;
 	release_sock(sk);
