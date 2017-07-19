@@ -24,21 +24,36 @@ struct sockaddr_in reroute_addr = {
 	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
 };
 
-/* Sock5 handshake for TOR */
-int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
+/* 
+ * Sock5 handshake for TOR 
+ * @param version	Same as ATYP in RFC1928. 0x01 for IPv4, 0x03 for domain names, and 0x04 for IPv6
+ */
+int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, unsigned char ip_type){
 	char ver;
 	char nmethods;
 	char method;
 	int buf_len;
 	struct msghdr hdr_out;	
 	struct msghdr hdr_in;
+	struct msghdr hdr_out_host;
+	struct msghdr hdr_in_host;
+	int buf_len_host;
 	char *in_buf;
+	char *in_buf_host;
 	char outgoing[3];
 	struct kvec iov_out;
 	struct kvec iov_in;
+	struct kvec iov_out_host;
+	struct kvec iov_in_host;
 	int addr_len_in;
+	int addr_len_in_host;
 	mm_segment_t old_fs;
 
+	unsigned char host_out[10];
+	unsigned char CMD;
+	unsigned char RSV;
+	unsigned char ATYP;
+	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 
@@ -55,7 +70,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	iov_out.iov_base = outgoing;
 	iov_out.iov_len = buf_len;
 	iov_iter_kvec(&hdr_out.msg_iter, WRITE | ITER_KVEC, &iov_out, 1, buf_len);
-	hdr_out.name = NULL;
+	hdr_out.msg_name = NULL;
 	hdr_out.msg_namelen = 0;
 	hdr_out.msg_flags = 0;
 	hdr_out.msg_control = NULL;
@@ -81,10 +96,64 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	release_sock(sk);
 	ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
 	lock_sock(sk);
-	set_fs(old_fs);
 
 	if (in_buf[0] == 0x05 && in_buf[1] == 0x00){
 		printk(KERN_ALERT "Initial Socks5 Handshake successful");
+	} else {
+		printk(KERN_ALERT "Initial Socks5 Handshake failed");
+		set_fs(old_fs);
+		return -1;
+	}
+
+	/* ------------------ Send URL to TOR -------------------- */
+
+	CMD = 0x01;
+	RSV = 0x00;
+	ATYP = ip_type;	
+	
+	host_out[0] = ver;
+	host_out[1] = CMD;
+	host_out[2] = RSV;
+	host_out[3] = ATYP;  
+	host_out[4] = htonl(((struct sockaddr_in *)uaddr)->sin_addr.s_addr);
+	host_out[8] = htons(((struct sockaddr_in *)uaddr)->sin_port);
+
+	buf_len_host = 10;
+	iov_out_host.iov_base = host_out;
+	iov_out_host.iov_len = buf_len_host;
+	iov_iter_kvec(&hdr_out_host.msg_iter, WRITE | ITER_KVEC, &iov_out_host, 1, buf_len_host);
+	hdr_out_host.msg_name = NULL;
+	hdr_out_host.msg_namelen = 0;
+	hdr_out_host.msg_flags = 0;
+ 	hdr_out_host.msg_control = NULL;
+ 	hdr_out_host.msg_controllen = 0;
+ 	hdr_out_host.msg_iocb = NULL;
+
+	release_sock(sk);
+	(*ref_tcp_sendmsg)(sk, &hdr_out_host, buf_len_host);
+	lock_sock(sk);
+
+	/* ----------------- Verify Host Recieved by TOR --------------*/
+
+	in_buf_host = kmalloc(buf_len_host, GFP_KERNEL);
+	if (!in_buf_host) {
+		set_fs(old_fs);
+		return -ENOMEM;
+	}
+
+	iov_in_host.iov_base = in_buf_host;
+	iov_in_host.iov_len = buf_len_host;
+	iov_iter_kvec(&hdr_in.msg_iter, READ | ITER_KVEC, &iov_in, 1, buf_len_host);
+
+	addr_len_in_host = 0;
+	release_sock(sk);
+	ref_tcp_recvmsg(sk, &hdr_in_host, buf_len_host, 0, 0, &addr_len_in_host);
+	lock_sock(sk);
+
+	set_fs(old_fs);
+
+	if (in_buf_host[0] == 0x05 && in_buf_host[1] == 0x00){
+		 printk(KERN_ALERT "Initial Socks5 Handshake successful");
 	} else {
 		printk(KERN_ALERT "Initial Socks5 Handshake failed");
 		return -1;
@@ -106,7 +175,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 		return err;
 	}
 
-	err = do_sock_handshake(sk, uaddr, addr_len);
+	err = do_sock_handshake(sk, uaddr, addr_len, 0x01);
 
 	return err;
 }
