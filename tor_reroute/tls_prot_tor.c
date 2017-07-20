@@ -29,6 +29,9 @@ struct sockaddr_in reroute_addr = {
  * @param version	Same as ATYP in RFC1928. 0x01 for IPv4, 0x03 for domain names, and 0x04 for IPv6
  */
 int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, unsigned char ip_type){
+	int err;
+	int bytes_rcvd;
+	int bytes_rcvd_host;
 	char ver;
 	char nmethods;
 	char method;
@@ -53,10 +56,14 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	unsigned char CMD;
 	unsigned char RSV;
 	unsigned char ATYP;
+
+	unsigned int remote_addr;
+	unsigned short remote_port;
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 
+	err = 0;
 	buf_len = 3;	
 
 	ver = 0x05; // Socks version 5
@@ -84,8 +91,8 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 
 	in_buf = kmalloc(2, GFP_KERNEL);
 	if (!in_buf){
-		set_fs(old_fs);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto Out_first_send;
 	}
 	
 	iov_in.iov_base = in_buf;
@@ -94,13 +101,17 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	
 	addr_len_in = 0;
 	release_sock(sk);
-	ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
+	bytes_rcvd = ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
+	if (bytes_rcvd < 0){
+		printk(KERN_ALERT "first receive failed");
+		goto Out_first_send;
+	}
 	lock_sock(sk);
 
 	if (in_buf[0] != 0x05 || in_buf[1] != 0x00){
 		printk(KERN_ALERT "Initial Socks5 Handshake failed");
-		set_fs(old_fs);
-		return -1;
+		err = -1;
+		goto Out_first_send;
 	}
 
 	/* ------------------ Send URL to TOR -------------------- */
@@ -113,8 +124,10 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	host_out[1] = CMD;
 	host_out[2] = RSV;
 	host_out[3] = ATYP;  
-	host_out[4] = htonl(((struct sockaddr_in *)uaddr)->sin_addr.s_addr);
-	host_out[8] = htons(((struct sockaddr_in *)uaddr)->sin_port);
+	remote_addr = ((struct sockaddr_in *)uaddr)->sin_addr.s_addr;
+	memcpy(&host_out[4], &remote_addr, sizeof(remote_addr));
+	remote_port = ((struct sockaddr_in *)uaddr)->sin_port;
+	memcpy(&host_out[8], &remote_port, sizeof(remote_port));
 
 	buf_len_host = 10;
 	iov_out_host.iov_base = host_out;
@@ -135,17 +148,21 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 
 	in_buf_host = kmalloc(buf_len_host, GFP_KERNEL);
 	if (!in_buf_host) {
-		set_fs(old_fs);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto Out_second_send;
 	}
 
 	iov_in_host.iov_base = in_buf_host;
 	iov_in_host.iov_len = buf_len_host;
-	iov_iter_kvec(&hdr_in.msg_iter, READ | ITER_KVEC, &iov_in_host, 1, buf_len_host);
+	iov_iter_kvec(&hdr_in_host.msg_iter, READ | ITER_KVEC, &iov_in_host, 1, buf_len_host);
 
 	addr_len_in_host = 0;
 	release_sock(sk);
-	ref_tcp_recvmsg(sk, &hdr_in_host, buf_len_host, 0, 0, &addr_len_in_host);
+	bytes_rcvd_host = ref_tcp_recvmsg(sk, &hdr_in_host, buf_len_host, 0, 0, &addr_len_in_host);
+	if(bytes_rcvd_host < 0){
+		printk(KERN_ALERT "second receive failed");
+		goto Out_second_send;
+	}
 	lock_sock(sk);
 
 	set_fs(old_fs);
@@ -154,10 +171,16 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 		 printk(KERN_ALERT "Initial Socks5 Handshake successful");
 	} else {
 		printk(KERN_ALERT "Initial Socks5 Handshake failed");
-		return -1;
+		err = -1;
+		goto Out_second_send;
 	}
 
-	return 0;
+Out_second_send:
+	kfree(in_buf_host);
+Out_first_send:
+	kfree(in_buf);
+	set_fs(old_fs);
+	return err;
 }
 
 /* Overriden TLS .connect for v4 function */

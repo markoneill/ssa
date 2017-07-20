@@ -29,6 +29,17 @@ MODULE_DESCRIPTION(DRIVER_DESC);
 
 static struct proto tcpv6_prot;
 
+static char* tor_path = "/usr/bin";
+module_param(tor_path, charp, 0000);
+MODULE_PARM_DESC(tor_path, "An absolute path to the TOR install location");
+int start_tor_engine(char*);
+void stop_task(struct task_struct*, int);
+int tor_engine_init(struct subprocess_info *, struct cred *);
+int alt_call_usermodehelper(char *, char **, char **, int,
+         int (*init)(struct subprocess_info *, struct cred *));
+
+struct task_struct* tor_engine_task;
+
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 extern int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -105,7 +116,12 @@ static int __init tor_reroute_init(void)
 		goto out;
 	}
 
-	printk(KERN_INFO "TCP TOR redirect Module loaded. All traffic now sent through TOR\n");
+	printk(KERN_INFO "TCP TOR redirect Module loaded\n");
+
+	start_tor_engine(tor_path);
+
+	printk(KERN_INFO "TOR loaded and running. All traffic now sent through TOR\n");
+
 	return 0;
 
 out:
@@ -114,9 +130,56 @@ out:
 
 static void __exit tor_reroute_exit(void)
 {
+	stop_task(tor_engine_task, SIGINT);
 	reset_tcp_prot();
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
+
+/**
+ * Sends SIGTERM to a task
+ * @param task A pointer to a task_struct
+ */
+void stop_task(struct task_struct* task, int signal) {
+        struct siginfo sinfo;
+        memset(&sinfo, 0, sizeof(struct siginfo));
+        sinfo.si_signo = signal;
+        sinfo.si_code = SI_KERNEL;
+        send_sig_info(signal, &sinfo, task);
+        return;
+}
+
+int start_tor_engine(char* path) {
+        char prog_path[64];
+        char* envp[] = { "HOME=/",
+                "TERM=linux",
+                "PATH=/sbin:/usr/sbin:/bin:/usr/bin",
+                NULL
+        };
+        char* argv[3];
+        snprintf(prog_path, 64, "%s/tor", path);
+        argv[0] = prog_path;
+        argv[1] = path;
+        argv[2] = NULL;
+        alt_call_usermodehelper(prog_path, argv, envp, UMH_WAIT_EXEC, tor_engine_init);
+        return 0;
+}
+
+int tor_engine_init(struct subprocess_info *info, struct cred *new) {
+        tor_engine_task = current;
+        return 0;
+}
+
+int alt_call_usermodehelper(char *path, char **argv, char **envp, int wait,
+        int (*init)(struct subprocess_info *info, struct cred *new)) {
+        struct subprocess_info *info;
+        gfp_t gfp_mask = (wait == UMH_NO_WAIT) ? GFP_ATOMIC : GFP_KERNEL;
+        info = call_usermodehelper_setup(path, argv, envp, gfp_mask, init, NULL, NULL);
+        if (info == NULL) {
+                return -ENOMEM;
+        }
+        return call_usermodehelper_exec(info, wait);
+}
+
 
 module_init(tor_reroute_init);
 module_exit(tor_reroute_exit);
