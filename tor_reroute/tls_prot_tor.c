@@ -8,6 +8,8 @@
 
 #define REROUTE_PORT		9050
 
+struct task_struct *tor_engine_task;
+
 /* Original TCP reference functions */
 int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -183,11 +185,20 @@ Out_first_send:
 	return err;
 }
 
+int is_ancestor(struct task_struct* parent) {
+        struct task_struct* cur_task = current;
+        while (cur_task->pid != 0) {
+                if (cur_task == parent) return 1;
+                cur_task = cur_task->parent;
+        }
+        return 0;
+}
+
 /* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 	int err;
 	
-	if (strstr(current->comm, "tor") != NULL){
+	if (current->tgid == tor_engine_task->tgid || is_ancestor(tor_engine_task)){
 		return (*ref_tcp_v4_connect)(sk, uaddr, addr_len);
 	}
 

@@ -32,13 +32,13 @@ static struct proto tcpv6_prot;
 static char* tor_path = "/usr/bin";
 module_param(tor_path, charp, 0000);
 MODULE_PARM_DESC(tor_path, "An absolute path to the TOR install location");
+
 int start_tor_engine(char*);
 void stop_task(struct task_struct*, int);
 int tor_engine_init(struct subprocess_info *, struct cred *);
 int alt_call_usermodehelper(char *, char **, char **, int,
          int (*init)(struct subprocess_info *, struct cred *));
-
-struct task_struct* tor_engine_task;
+extern struct task_struct *tor_engine_task;
 
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -120,7 +120,7 @@ static int __init tor_reroute_init(void)
 
 	start_tor_engine(tor_path);
 
-	printk(KERN_INFO "TOR loaded and running. All traffic now sent through TOR\n");
+	printk(KERN_INFO "TOR loaded and running as pid:%i. All traffic now sent through TOR\n", tor_engine_task->pid);
 
 	return 0;
 
@@ -131,6 +131,7 @@ out:
 static void __exit tor_reroute_exit(void)
 {
 	stop_task(tor_engine_task, SIGINT);
+	printk(KERN_INFO "TOR engine stopped. Traffic is no longer secure.\n");
 	reset_tcp_prot();
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 }
@@ -156,7 +157,7 @@ int start_tor_engine(char* path) {
                 NULL
         };
         char* argv[3];
-        snprintf(prog_path, 64, "%s/tor", path);
+        snprintf(prog_path, 64, "%s/autotor_loader", path);
         argv[0] = prog_path;
         argv[1] = path;
         argv[2] = NULL;

@@ -19,6 +19,9 @@ typedef struct tls_sock_ops {
         struct sock* sk;
 } tls_sock_ops;
 
+int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, unsigned char ip_type);
+int is_ancestor(struct task_struct* parent);
+
 /* Corresponding TLS override functions */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
