@@ -43,12 +43,6 @@ extern struct task_struct *tor_engine_task;
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 extern int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-extern int (*ref_tcp_disconnect)(struct sock *sk, int flags);
-extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
-extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
-                        int flags, int *addr_len);
-extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
-extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
 
 /*
  *	Save off tcp_prot original functionality and replace them with custom
@@ -72,21 +66,6 @@ int set_tcp_prot(void){
 	ref_tcp_v6_connect = tcpv6_prot.connect;
 	tcpv6_prot.connect = tls_v6_connect;
 
-	ref_tcp_disconnect = tcp_prot.disconnect;
-	tcp_prot.disconnect = tls_disconnect;
-
-	ref_tcp_shutdown = tcp_prot.shutdown;
-	tcp_prot.shutdown = tls_shutdown;
-
-	ref_tcp_recvmsg = tcp_prot.recvmsg;
-	tcp_prot.recvmsg = tls_recvmsg;
-
-	ref_tcp_sendmsg = tcp_prot.sendmsg;
-	tcp_prot.sendmsg = tls_sendmsg;
-
-	ref_tcp_v4_init_sock = tcp_prot.init;
-	tcp_prot.init = tls_v4_init_sock;
-
 	printk(KERN_ALERT "TLS protocols set");
 	return 0;
 }
@@ -97,11 +76,6 @@ int set_tcp_prot(void){
 void reset_tcp_prot(void){
 	tcp_prot.connect = ref_tcp_v4_connect;
 	tcpv6_prot.connect = ref_tcp_v6_connect;
-	tcp_prot.disconnect = ref_tcp_disconnect;
-	tcp_prot.shutdown = ref_tcp_shutdown;
-	tcp_prot.recvmsg = ref_tcp_recvmsg;
-	tcp_prot.sendmsg = ref_tcp_sendmsg;
-	tcp_prot.init = ref_tcp_v4_init_sock;
 }
 
 static int __init tor_reroute_init(void)

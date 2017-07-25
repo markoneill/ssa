@@ -4,6 +4,8 @@
  */
 
 #include <linux/slab.h>
+#include <linux/in6.h>
+#include <net/tcp.h>
 #include "tls_prot_tor.h"
 
 #define REROUTE_PORT		9050
@@ -13,17 +15,17 @@ struct task_struct *tor_engine_task;
 /* Original TCP reference functions */
 int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-int (*ref_tcp_disconnect)(struct sock *sk, int flags);
-void (*ref_tcp_shutdown)(struct sock *sk, int how);
-int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
-                        int flags, int *addr_len);
-int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
-int (*ref_tcp_v4_init_sock)(struct sock *sk);
 
 struct sockaddr_in reroute_addr = {
 	.sin_family = AF_INET,
 	.sin_port = htons(REROUTE_PORT),
 	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+};
+
+struct sockaddr_in6 reroute_addr6 = {
+	.sin6_family = AF_INET6,
+	.sin6_port = htons(REROUTE_PORT),
+	.sin6_addr = IN6ADDR_LOOPBACK_INIT
 };
 
 /* 
@@ -87,7 +89,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	hdr_out.msg_iocb = NULL;
 
 	release_sock(sk);
-	(*ref_tcp_sendmsg)(sk, &hdr_out, buf_len);
+	tcp_prot.sendmsg(sk, &hdr_out, buf_len);
 	lock_sock(sk);
 	/* --------------- Recieve message from TOR ---------------------- */
 
@@ -103,7 +105,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	
 	addr_len_in = 0;
 	release_sock(sk);
-	bytes_rcvd = ref_tcp_recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
+	bytes_rcvd = tcp_prot.recvmsg(sk, &hdr_in, 2, 0, 0, &addr_len_in);
 	if (bytes_rcvd < 0){
 		printk(KERN_ALERT "first receive failed");
 		goto Out_first_send;
@@ -143,7 +145,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
  	hdr_out_host.msg_iocb = NULL;
 
 	release_sock(sk);
-	(*ref_tcp_sendmsg)(sk, &hdr_out_host, buf_len_host);
+	tcp_prot.sendmsg(sk, &hdr_out_host, buf_len_host);
 	lock_sock(sk);
 
 	/* ----------------- Verify Host Recieved by TOR --------------*/
@@ -160,7 +162,7 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 
 	addr_len_in_host = 0;
 	release_sock(sk);
-	bytes_rcvd_host = ref_tcp_recvmsg(sk, &hdr_in_host, buf_len_host, 0, 0, &addr_len_in_host);
+	bytes_rcvd_host = tcp_prot.recvmsg(sk, &hdr_in_host, buf_len_host, 0, 0, &addr_len_in_host);
 	if(bytes_rcvd_host < 0){
 		printk(KERN_ALERT "second receive failed");
 		goto Out_second_send;
@@ -196,8 +198,7 @@ int is_ancestor(struct task_struct* parent) {
 
 /* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	int err;
-	
+	int err;	
 	if (current->tgid == tor_engine_task->tgid || is_ancestor(tor_engine_task)){
 		return (*ref_tcp_v4_connect)(sk, uaddr, addr_len);
 	}
@@ -214,31 +215,17 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
 
 /* Overriden TLS .connect for v6 function */
 int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
-}
+	int err;    
+        if (current->tgid == tor_engine_task->tgid || is_ancestor(tor_engine_task)){
+                return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
+        }
 
-/* Overriden TLS .disconnect function */
-int tls_disconnect(struct sock *sk, int flags){
-	return (*ref_tcp_disconnect)(sk, flags);
-}
+        err = (*ref_tcp_v6_connect)(sk, ((struct sockaddr*)&reroute_addr6), addr_len);
+        if (err != 0){ 
+                return err;
+        }
 
-/* Overriden TLS .shutdown function */
-void tls_shutdown(struct sock *sk, int how){
-	(*ref_tcp_shutdown)(sk, how);
-}
+        err = do_sock_handshake(sk, uaddr, addr_len, 0x04);
 
-/* Overriden TLS .recvmsg function */
-int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
-		int flags, int *addr_len){
-	return (*ref_tcp_recvmsg)(sk, msg, len, nonblock, flags, addr_len);
-}
-
-/* Overriden TLS .sendmsg function */
-int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
-	return (*ref_tcp_sendmsg)(sk, msg, size);
-}
-
-/* Overriden TLS .init function */
-int tls_v4_init_sock(struct sock *sk){
-	return (*ref_tcp_v4_init_sock)(sk);
+        return err;
 }

@@ -5,6 +5,7 @@ all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 	gcc -o autotor_loader autotor_loader.c
 
-clean:
+.PHONY : clean
+clean :
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
-	rm autotor_loader
+	-rm autotor_loader
