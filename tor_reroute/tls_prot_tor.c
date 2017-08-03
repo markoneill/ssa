@@ -172,9 +172,9 @@ int do_sock_handshake(struct sock *sk, struct sockaddr *uaddr, int addr_len, uns
 	set_fs(old_fs);
 
 	if (in_buf_host[0] == 0x05 && in_buf_host[1] == 0x00){
-		 printk(KERN_ALERT "Initial Socks5 Handshake successful");
+		 printk(KERN_ALERT "Initial Socks5 %i Handshake successful", ip_type);
 	} else {
-		printk(KERN_ALERT "Initial Socks5 Handshake failed");
+		printk(KERN_ALERT "Initial Socks5 %i Handshake failed", ip_type);
 		err = -1;
 		goto Out_second_send;
 	}

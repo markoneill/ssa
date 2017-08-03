@@ -14,6 +14,7 @@
 #include <linux/netfilter.h>
 #include <linux/hashtable.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/in.h>
 #include <linux/capability.h>
 #include "tls_prot_tor.h"

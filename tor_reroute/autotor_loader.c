@@ -14,6 +14,6 @@ int main(){
 //	close(0);
 //	if (dup2(fp, 1) < 0)	return 1;
 //	if (dup2(fp, 2) < 0)	return 1;
-	err = execv("/usr/sbin/tor", tor_argv);
+	err = execv("/usr/bin/tor", tor_argv);
 //	err = execv("/home/kerneldev/Documents/tls_kernel/tor_reroute/looper", tor_argv);
 }
