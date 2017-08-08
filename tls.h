@@ -1,5 +1,5 @@
-#ifndef _TLS_PROTO_H
-#define _TLS_PROTO_H
+#ifndef _TLS_H
+#define _TLS_H
 
 #include <linux/socket.h>
 #include <net/sock.h>
@@ -27,6 +27,9 @@ int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 		int flags, int *addr_len);
 int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
 int tls_v4_init_sock(struct sock *sk);
+int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
+int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+
 
 /* Hash Helper functions */
 tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk);

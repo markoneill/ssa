@@ -1,40 +1,20 @@
 /*
- * A loadable kernel module that completes all registrations necessary to give TLS functionality
- * to the POSIX socket API call. Also registers the socket option functions to set and get the
- * host name for TLS to use.
+ * Overrides the TCP functions to give the TLS functionality. Also contains functions manage
+ * the hash table where TLS socket options are stored.
  */
 
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/kallsyms.h>
-#include <net/protocol.h>
-#include <net/tcp.h>
-#include <net/inet_common.h>
-#include <net/sock.h>
-#include <linux/netfilter.h>
-#include <linux/hashtable.h>
-#include <linux/sched.h>
-#include <linux/in.h>
-#include <linux/capability.h>
-#include "tls_prot.h"
+#include "tls.h"
+
+#define HASH_TABLE_BITSIZE	9
+#define REROUTE_PORT		8443
+
+#define MAX_HOST_LEN	255
+#define HOSTNAME	85
+#define ORIG_DEST_ADDR 	86
 
 
-#define DRIVER_AUTHOR 	"Mark O'Neill <phoenixteam1@gmail.com> and Nick Bonner <j.nick.bonner@gmail.com>"
-#define DRIVER_DESC	"A loadable TLS module to give TLS functionality to the POSIX socket API"
-#define IPPROTO_TLS 	(715 % 255)	
-#define TLS_SOCKOPT_BASE	85
-#define MAX_HOST_LEN		255
-#define TLS_SOCKOPT_SET		(TLS_SOCKOPT_BASE)
-#define TLS_SOCKOPT_GET		(TLS_SOCKOPT_BASE)
-#define TLS_SOCKOPT_MAX		(TLS_SOCKOPT_BASE + 1)
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR(DRIVER_AUTHOR);
-MODULE_DESCRIPTION(DRIVER_DESC);
-
-static struct proto tls_prot;
-static struct proto tcpv6_prot;
-static struct net_protocol ipprot;
+static DEFINE_HASHTABLE(sock_ops_table, HASH_TABLE_BITSIZE);
+static DEFINE_SPINLOCK(sock_ops_lock);
 
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -45,70 +25,180 @@ extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, i
                         int flags, int *addr_len);
 extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
+extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
+extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
-/* The TLS protocol structure to be registered */
-static struct inet_protosw tls_stream_protosw = {
-	.type		= SOCK_STREAM,
-	.protocol	= IPPROTO_TLS,
-	.prot		= &tls_prot,
-	.ops		= &inet_stream_ops,
-	.flags 		= INET_PROTOSW_ICSK
+int get_hostname(struct sock* sk, char __user *optval, int* __user len);
+int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
+int is_valid_test_string(void *input);
+
+struct sockaddr_in reroute_addr = {
+	.sin_family = AF_INET,
+	.sin_port = htons(REROUTE_PORT),
+	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
 };
 
+/* Overriden TLS .connect for v4 function */
+int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
+	printk(KERN_ALERT "Address: %s", uaddr->sa_data);
+	
+	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
+}
 
-/* Defines the socket options to specify a host name for TLS protocol */
-int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len);
-int get_host_name(struct sock *sk, int cmd, void __user *user, int *len);
-static struct nf_sockopt_ops tls_sockopts = {
-	.pf		= PF_INET,
-	.set_optmin	= TLS_SOCKOPT_SET,
-	.set_optmax	= TLS_SOCKOPT_MAX,
-	.set		= set_host_name,
-	.get_optmin	= TLS_SOCKOPT_GET,
-	.get_optmax	= TLS_SOCKOPT_MAX,
-	.get		= get_host_name,
-	.owner		= THIS_MODULE
-};
+/* Overriden TLS .connect for v6 function */
+int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
+	return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
+}
 
-/*
- *	Creates a copy of the tcp_prot structure and overrides
- *	posix method's functionality.
- */
-int set_tls_prot(void){
+/* Overriden TLS .disconnect function */
+int tls_disconnect(struct sock *sk, int flags){
+	return (*ref_tcp_disconnect)(sk, flags);
+}
 
-	unsigned long kallsyms_err;
+/* Overriden TLS .shutdown function */
+void tls_shutdown(struct sock *sk, int how){
+	tls_sock_ops* to_free = tls_sock_ops_get(current->pid, sk);
+	if (to_free != NULL){
+		kfree(to_free);
+	}	
+	(*ref_tcp_shutdown)(sk, how);
+}
 
-	kallsyms_err = kallsyms_lookup_name("tcpv6_prot");
-	if (kallsyms_err == 0){
-        	printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcpv6_prot address\n");
+/* Overriden TLS .recvmsg function */
+int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+		int flags, int *addr_len){
+	return (*ref_tcp_recvmsg)(sk, msg, len, nonblock, flags, addr_len);
+}
+
+/* Overriden TLS .sendmsg function */
+int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
+	return (*ref_tcp_sendmsg)(sk, msg, size);
+}
+
+/* Overriden TLS .init function */
+int tls_v4_init_sock(struct sock *sk){
+	tls_sock_ops* new_sock_op;
+	if ((new_sock_op = kmalloc(sizeof(struct tls_sock_ops), GFP_KERNEL)) == NULL){
+		printk(KERN_ALERT "kmalloc failed when creating tls_sock_ops");
 		return -1;
-        }
+	}
+	new_sock_op->host_name = NULL;
+	new_sock_op->pid = current->pid;
+	new_sock_op->sk = sk;
+	new_sock_op->key = new_sock_op->pid ^ (unsigned long)sk;
+	spin_lock(&sock_ops_lock);
+	hash_add(sock_ops_table, &new_sock_op->hash, new_sock_op->key);
+	spin_unlock(&sock_ops_lock);
+	return (*ref_tcp_v4_init_sock)(sk);
+}
 
-	tls_prot = tcp_prot;
-	tcpv6_prot = *(struct proto *)kallsyms_err;
+/**
+ * Finds a socket option in the hash table
+ * @param	pid - The desired socket options Process ID
+ * @param	sk - A pointer to the sock struct related to the socket option
+ * @return	The desired socket options if found. If not found, returns NULL
+ */
+tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk){
+	tls_sock_ops* sock_op = NULL;
+	tls_sock_ops* sock_op_it;
+	hash_for_each_possible(sock_ops_table, sock_op_it, hash, pid ^ (unsigned long)sk){
+		if (sock_op_it->pid == pid && sock_op_it->sk == sk){
+			sock_op = sock_op_it;
+			break;
+		}
+	}
+	return sock_op;
+}
 
-	ref_tcp_v4_connect = tls_prot.connect;
-	tls_prot.connect = tls_v4_connect;
+void tls_prot_init(){
+	hash_init(sock_ops_table);
+}
 
-	ref_tcp_v6_connect = tcpv6_prot.connect;
-	tcpv6_prot.connect = tls_v6_connect;
+int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
+	switch (optname) {
+		case HOSTNAME:
+			return set_hostname(sk, optval, len);
+		case ORIG_DEST_ADDR:
+			break;
+		default:
+			return ref_tcp_setsockopt(sk, level, optname, optval, len);
+	}
+	return 0;
+}
 
-	ref_tcp_disconnect = tls_prot.disconnect;
-	tls_prot.disconnect = tls_disconnect;
+int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen) {
+	switch (optname) {
+		case HOSTNAME:
+			return get_hostname(sk, optval, optlen);
+		case ORIG_DEST_ADDR:
+			break;
+		default:
+			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
+	}
+	return 0;
+}
 
-	ref_tcp_shutdown = tls_prot.shutdown;
-	tls_prot.shutdown = tls_shutdown;
 
-	ref_tcp_recvmsg = tls_prot.recvmsg;
-	tls_prot.recvmsg = tls_recvmsg;
+int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
+	char *loc_host_name;
 
-	ref_tcp_sendmsg = tls_prot.sendmsg;
-	tls_prot.sendmsg = tls_sendmsg;
+	if (optval == NULL){
+		printk(KERN_ALERT "user input is NULL");
+		goto einval_out;
+	}
 
-	ref_tcp_v4_init_sock = tls_prot.init;
-	tls_prot.init = tls_v4_init_sock;
+	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
 
-	printk(KERN_ALERT "TLS protocols set");
+	if (len > MAX_HOST_LEN){
+		printk(KERN_ALERT "user input host_name too long, cutting to 255\n");
+		len = MAX_HOST_LEN;
+	}	
+
+	loc_host_name = krealloc(loc_host_name, len + 1, GFP_KERNEL);
+
+	if (copy_from_user(loc_host_name, optval, len) != 0){
+		return EFAULT;
+	}
+ 
+	loc_host_name[len] = '\0';	
+
+	if (!is_valid_test_string(optval)){
+		kfree(loc_host_name);
+		printk(KERN_ALERT "user input is invalid hostname\n");
+		goto einval_out;
+	}
+
+	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
+	printk(KERN_ALERT "host_name registered with socket: %s\n", loc_host_name);
+	return  0;
+
+einval_out:
+	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOPT. HOST NAME HAS NOT BEEN SET\n");
+	return EINVAL;	
+}
+
+int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
+	char *m_host_name;
+	size_t host_name_len;
+	
+	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
+	printk(KERN_ALERT "Host Name: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
+	if (m_host_name == NULL){
+		printk(KERN_ALERT "Host name requested was NULL\n");
+		return EFAULT;
+	}
+	host_name_len = strnlen(m_host_name, MAX_HOST_LEN) + 1;
+	if ((unsigned int) *len < host_name_len){
+		printk(KERN_ALERT "len smaller than requested host_name\n");
+		return EINVAL;	
+	} 
+	/* Check ownership of pointer and FS thingy */
+	if (copy_to_user(optval, m_host_name, host_name_len) != 0 ){
+		printk(KERN_ALERT "host_name copy to user failed\n");
+		return EFAULT;
+	}
+	
+	*len = (int)host_name_len - 1;
 	return 0;
 }
 
@@ -117,7 +207,7 @@ int set_tls_prot(void){
  * @param	input - The void *user that was passed to setsockops
  * @return	1 if string is valid. Otherwise 0.
  */
-int is_valid_test_string(void *input){
+int is_valid_test_string(void *input) {
         int str_len;
 	unsigned int i;
         str_len = strnlen((char *)input, 255);
@@ -132,176 +222,3 @@ int is_valid_test_string(void *input){
         return 1;
 }
 
-/* Registers all socket options for TLS functionality */
-void register_sockopts(void){
-	int err;
-	
-	err = nf_register_sockopt(&tls_sockopts);
-	if (err != 0){
-		printk(KERN_ALERT "Failed to register new sock opts with the kernel. TLS host_name specification will fail\n");
-	}
-}
-
-/* Unregisters the socket options for TLS */
-void inline unregister_sockopts(void){
-	nf_unregister_sockopt(&tls_sockopts);
-}
-
-static int __init tls_init(void)
-{
-	int err;	
-	static const struct net_protocol *ipprot_lookup;
-	unsigned long kallsyms_err;
-
-	printk(KERN_ALERT "Initializing TLS module\n");
-	
-	/* initialize tls_prot hash table */
-	tls_prot_init();
-
-	/* register the tls socket options */
-	register_sockopts();
-	
-	/* Establish and register the tls_prot structure */
-	err = set_tls_prot();
-	if (err != 0){
-		goto out;
-	}
-
-	err = proto_register(&tls_prot, 1);
-
-	if (err == 0){
-		printk(KERN_INFO "Protocol registration was successful\n");
-	}
-	else {
-		printk(KERN_INFO "Protocol registration failed\n");
-		goto out;
-	}
-
-	/*
-	 * Retrieve the non-exported tcp_protocol struct address location 
-	 * and verify that it was found. If it fails, unregister the protocol
-	 * and exit the module initialization.
-	 */
-	kallsyms_err = kallsyms_lookup_name("tcp_protocol");	
-	if (kallsyms_err == 0){
-		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address\n");
-		goto out_proto_unregister;
-	}
-
-	/* Create a copy of the tcp net_protocol and register it to the IPPROTO_TLS macro */
-	ipprot_lookup = (struct net_protocol*)kallsyms_err;
-	ipprot = *ipprot_lookup;
-	
-	err = inet_add_protocol(&ipprot, IPPROTO_TLS);
-	
-	if (err == 0){
-		printk(KERN_INFO "Protocol insertion in inet_protos[] was successful\n");
-	}
-	else {
-		printk(KERN_INFO "Protocol insertion in inet_protos[] failed\n");
-		goto out_proto_unregister;
-	}
-
-	/* Register the tls_stream_protosw */
-	inet_register_protosw(&tls_stream_protosw);
-
-	printk(KERN_INFO "TLS Module loaded and tls_prot registered\n");
-	return 0;
-
-out:
-	return err;
-out_proto_unregister:
-	proto_unregister(&tls_prot);
-	goto out;
-}
-
-static void __exit tls_exit(void)
-{
-	/* Unregister the protocols and structs in the reverse order they were registered */
-	inet_unregister_protosw(&tls_stream_protosw);
-	inet_del_protocol(&ipprot, IPPROTO_TLS);
-	
-	/* Set these pointers to NULL to avoid deleting tcp_prot's copied memory */
-	tls_prot.slab = NULL;
-	tls_prot.rsk_prot = NULL;
-	tls_prot.twsk_prot = NULL;
-
-	proto_unregister(&tls_prot);
-	unregister_sockopts();
-	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
-}
-
-int set_host_name(struct sock *sk, int cmd, void __user *user, unsigned int len)
-{
-	char *loc_host_name;
-
-	if (user == NULL){
-		printk(KERN_ALERT "user input is NULL");
-		goto einval_out;
-	}
-
-	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
-	if (cmd != TLS_SOCKOPT_SET){
-		printk(KERN_ALERT "user input cmd does not match socket option\n");
-		goto einval_out;
-	}
-
-	if (len > MAX_HOST_LEN){
-		printk(KERN_ALERT "user input host_name too long, cutting to 255\n");
-		len = MAX_HOST_LEN;
-	}	
-
-	loc_host_name = krealloc(loc_host_name, len + 1, GFP_KERNEL);
-
-	if (copy_from_user(loc_host_name, user, len) != 0){
-		return EFAULT;
-	}
- 
-	loc_host_name[len] = '\0';	
-
-	if (!is_valid_test_string(user)){
-		kfree(loc_host_name);
-		printk(KERN_ALERT "user input is invalid hostname\n");
-		goto einval_out;
-	}
-
-	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
-	printk(KERN_ALERT "host_name registered with socket: %s\n", loc_host_name);
-	return  0;
-
-einval_out:
-	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOP. HOST NAME HAS NOT BEEN SET\n");
-	return EINVAL;	
-}
-
-int get_host_name(struct sock *sk, int cmd, void __user *user, int *len)
-{
-	char *m_host_name;
-	size_t host_name_len;
-	
-	if (cmd != TLS_SOCKOPT_GET){
-		return EINVAL;
-	}
-	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;		
-	printk(KERN_ALERT "Host Name: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
-	if (m_host_name == NULL){
-		printk(KERN_ALERT "Host name requested was NULL\n");
-		return EFAULT;
-	}
-	host_name_len = strnlen(m_host_name, MAX_HOST_LEN) + 1;
-	if ((unsigned int) *len < host_name_len){
-		printk(KERN_ALERT "len smaller than requested host_name\n");
-		return EINVAL;	
-	} 
-	/* Check ownership of pointer and FS thingy */
-	if (copy_to_user(user, m_host_name, host_name_len) != 0 ){
-		printk(KERN_ALERT "host_name copy to user failed\n");
-		return EFAULT;
-	}
-	
-	*len = (int)host_name_len - 1;
-	return 0;
-}
-
-module_init(tls_init);
-module_exit(tls_exit);
