@@ -21,7 +21,7 @@ void run_sockops_tests(void) {
 		perror("socket");
 		exit(EXIT_FAILURE);
 	}
-
+/*
 	const char hostname[] = "www.google.com";
         if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
 		perror("setsockopt: SO_HOSTNAME");
@@ -44,8 +44,7 @@ void run_sockops_tests(void) {
 		fprintf(stderr, "Hostname mismatch: expected %s but got %s\n", hostname, hostname_retrieved);
 		exit(EXIT_FAILURE);
 	}
-
-
+*/
         struct sockaddr_in dst_addr = {
                 .sin_family = AF_INET,
                 .sin_port = htons(8888),

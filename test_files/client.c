@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
             perror("client: socket");
             continue;
         }
-
+/*
 	//Set socket options testing
         optval = "google.com";
         err = setsockopt(sockfd, IPPROTO_TCP, 85, optval, strnlen(optval, 255));
@@ -78,9 +78,8 @@ int main(int argc, char *argv[])
                 printf("%i\t%s\n", optlen, optval2);
             }
         }
-
+*/
 	int conRet = connect(sockfd, p->ai_addr, p->ai_addrlen);
-	printf("%i\n", conRet);
         if (conRet == -1) {
             close(sockfd);
             perror("client: connect");
@@ -98,7 +97,7 @@ int main(int argc, char *argv[])
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
             s, sizeof s);
     printf("client: connecting to %s\n", s);
-
+/*
     freeaddrinfo(servinfo); // all done with this structure
 
     if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
@@ -109,7 +108,7 @@ int main(int argc, char *argv[])
     buf[numbytes] = '\0';
 
     printf("client: received '%s'\n",buf);
-
+*/
     close(sockfd);
 
     return 0;

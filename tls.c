@@ -27,6 +27,7 @@ extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
 extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
                         int flags, int *addr_len);
 extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
+extern void (*ref_tcp_close)(struct sock *sk, long timeout);
 extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
 extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
@@ -84,12 +85,14 @@ int tls_disconnect(struct sock *sk, int flags){
 }
 
 /* Overriden TLS .shutdown function */
-void tls_shutdown(struct sock *sk, int how){
+void tls_close(struct sock *sk, long timeout){
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
 	if (sock_ext_data != NULL){
+		hash_del(&sock_ext_data->hash);
+		kfree(sock_ext_data->hostname);
 		kfree(sock_ext_data);
 	}	
-	(*ref_tcp_shutdown)(sk, how);
+	(*ref_tcp_close)(sk, timeout);
 	return;
 }
 
@@ -102,6 +105,11 @@ int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 /* Overriden TLS .sendmsg function */
 int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
 	return (*ref_tcp_sendmsg)(sk, msg, size);
+}
+
+/* Overriden TLS .shutodwn function */
+void tls_shutdown(struct sock *sk, int how){
+	return (*ref_tcp_shutdown)(sk, how);
 }
 
 /* Overriden TLS .init function */
@@ -149,15 +157,25 @@ void tls_cleanup() {
         tls_sock_ext_data_t* it;
         struct hlist_node tmp;
         struct hlist_node* tmpptr = &tmp;
+
+	spin_lock(&dst_map_lock);
+	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash){
+	//	hash_del(&it->remote_hash);
+	}
+	spin_unlock(&dst_map_lock);
+
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
                 printk(KERN_INFO "Deleting data from bucket [%d] with pid %d and socket %p", bkt, it->pid, it->sk);
-                hash_del(&it->hash);
+		(*ref_tcp_close)(it->sk, 0);
+	//	hash_del(&it->remote_hash);
+         ///       hash_del(&it->hash);
                 kfree(it->hostname);
+		kfree(it);
         }
         spin_unlock(&tls_sock_ext_lock);
 
-	/* XXX TODO free up dst_map resources here */
+	
 	return;
 }
 

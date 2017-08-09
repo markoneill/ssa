@@ -40,6 +40,7 @@ int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonb
                         int flags, int *addr_len);
 int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 int (*ref_tcp_v4_init_sock)(struct sock *sk);
+void (*ref_tcp_close)(struct sock *sk, long timeout);
 int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
@@ -87,6 +88,9 @@ int set_tls_prot(void) {
 
 	ref_tcp_sendmsg = tls_prot.sendmsg;
 	tls_prot.sendmsg = tls_sendmsg;
+
+	ref_tcp_close = tls_prot.close;
+	tls_prot.close = tls_close;
 
 	ref_tcp_v4_init_sock = tls_prot.init;
 	tls_prot.init = tls_v4_init_sock;
@@ -147,6 +151,8 @@ static int __init tls_init(void) {
 	ipprot_lookup = (struct net_protocol*)kallsyms_err;
 	ipprot = *ipprot_lookup;
 	
+
+	inet_register_protosw(&tls_stream_protosw);
 	err = inet_add_protocol(&ipprot, IPPROTO_TLS);
 	
 	if (err == 0){
@@ -158,7 +164,6 @@ static int __init tls_init(void) {
 	}
 
 	/* Register the tls_stream_protosw */
-	inet_register_protosw(&tls_stream_protosw);
 
 	printk(KERN_INFO "TLS Module loaded and tls_prot registered\n");
 	return 0;
@@ -172,8 +177,8 @@ out_proto_unregister:
 
 static void __exit tls_exit(void) {
 	/* Unregister the protocols and structs in the reverse order they were registered */
-	inet_unregister_protosw(&tls_stream_protosw);
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
+	inet_unregister_protosw(&tls_stream_protosw);
 	
 	tcp_prot.setsockopt = ref_tcp_setsockopt;
 	tcp_prot.getsockopt = ref_tcp_getsockopt;
