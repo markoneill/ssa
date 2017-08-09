@@ -3,15 +3,13 @@
  * the hash table where TLS socket options are stored.
  */
 
+#include "constants.h"
 #include "tls.h"
 
 #define HASH_TABLE_BITSIZE	9
 #define REROUTE_PORT		8443
 
 #define MAX_HOST_LEN	255
-#define HOSTNAME	85
-#define ORIG_DEST_ADDR 	86
-
 
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
@@ -133,9 +131,9 @@ void tls_cleanup() {
 
 int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
 	switch (optname) {
-		case HOSTNAME:
+		case SO_HOSTNAME:
 			return set_hostname(sk, optval, len);
-		case ORIG_DEST_ADDR:
+		case SO_ORIG_DST:
 			return 0; /* Unimplemented */
 		default:
 			return ref_tcp_setsockopt(sk, level, optname, optval, len);
@@ -145,9 +143,9 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 
 int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen) {
 	switch (optname) {
-		case HOSTNAME:
+		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
-		case ORIG_DEST_ADDR:
+		case SO_ORIG_DST:
 			return get_orig_dst(sk, optval, optlen);
 		default:
 			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
@@ -238,6 +236,7 @@ int is_valid_host_string(void *input) {
 }
 
 int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
+	printk(KERN_ALERT "Someone called get_orig_dst\n");
         return 0;
 }
 
