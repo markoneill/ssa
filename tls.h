@@ -1,5 +1,5 @@
-#ifndef _TLS_H
-#define _TLS_H
+#ifndef TLS_H
+#define TLS_H
 
 #include <linux/socket.h>
 #include <net/sock.h>
@@ -9,14 +9,14 @@
 #include <linux/sched.h> // for current (pointer to task)
 #include <linux/hashtable.h>
 
-/* Holds all variables for socket options */
-typedef struct tls_sock_ops {
+/* Holds additional data needed by our TLS sockets */
+typedef struct tls_sock_ext_data {
         unsigned long key;
         struct hlist_node hash;
         pid_t pid;
-        char *host_name;
+        char *hostname;
         struct sock* sk;
-} tls_sock_ops;
+} tls_sock_ext_data_t;
 
 /* Corresponding TLS override functions */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -32,7 +32,8 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 
 
 /* Hash Helper functions */
-tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk);
-void tls_prot_init(void);
+tls_sock_ext_data_t* tls_sock_ext_get_data(pid_t pid, struct sock* sk);
+void tls_setup(void);
+void tls_cleanup(void);
 
 #endif

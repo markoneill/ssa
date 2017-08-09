@@ -13,8 +13,8 @@
 #define ORIG_DEST_ADDR 	86
 
 
-static DEFINE_HASHTABLE(sock_ops_table, HASH_TABLE_BITSIZE);
-static DEFINE_SPINLOCK(sock_ops_lock);
+static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
+static DEFINE_SPINLOCK(tls_sock_ext_lock);
 
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -30,7 +30,8 @@ extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char _
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
-int is_valid_test_string(void *input);
+int is_valid_host_string(void *input);
+int get_orig_dst(struct sock *sk, void __user *optval, int __user *len);
 
 struct sockaddr_in reroute_addr = {
 	.sin_family = AF_INET,
@@ -57,11 +58,12 @@ int tls_disconnect(struct sock *sk, int flags){
 
 /* Overriden TLS .shutdown function */
 void tls_shutdown(struct sock *sk, int how){
-	tls_sock_ops* to_free = tls_sock_ops_get(current->pid, sk);
-	if (to_free != NULL){
-		kfree(to_free);
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
+	if (sock_ext_data != NULL){
+		kfree(sock_ext_data);
 	}	
 	(*ref_tcp_shutdown)(sk, how);
+	return;
 }
 
 /* Overriden TLS .recvmsg function */
@@ -77,18 +79,18 @@ int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
 
 /* Overriden TLS .init function */
 int tls_v4_init_sock(struct sock *sk){
-	tls_sock_ops* new_sock_op;
-	if ((new_sock_op = kmalloc(sizeof(struct tls_sock_ops), GFP_KERNEL)) == NULL){
-		printk(KERN_ALERT "kmalloc failed when creating tls_sock_ops");
+	tls_sock_ext_data_t* sock_ext_data;
+	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL){
+		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock");
 		return -1;
 	}
-	new_sock_op->host_name = NULL;
-	new_sock_op->pid = current->pid;
-	new_sock_op->sk = sk;
-	new_sock_op->key = new_sock_op->pid ^ (unsigned long)sk;
-	spin_lock(&sock_ops_lock);
-	hash_add(sock_ops_table, &new_sock_op->hash, new_sock_op->key);
-	spin_unlock(&sock_ops_lock);
+	sock_ext_data->hostname = NULL;
+	sock_ext_data->pid = current->pid;
+	sock_ext_data->sk = sk;
+	sock_ext_data->key = sock_ext_data->pid ^ (unsigned long)sk;
+	spin_lock(&tls_sock_ext_lock);
+	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
+	spin_unlock(&tls_sock_ext_lock);
 	return (*ref_tcp_v4_init_sock)(sk);
 }
 
@@ -98,20 +100,35 @@ int tls_v4_init_sock(struct sock *sk){
  * @param	sk - A pointer to the sock struct related to the socket option
  * @return	The desired socket options if found. If not found, returns NULL
  */
-tls_sock_ops* tls_sock_ops_get(pid_t pid, struct sock* sk){
-	tls_sock_ops* sock_op = NULL;
-	tls_sock_ops* sock_op_it;
-	hash_for_each_possible(sock_ops_table, sock_op_it, hash, pid ^ (unsigned long)sk){
-		if (sock_op_it->pid == pid && sock_op_it->sk == sk){
-			sock_op = sock_op_it;
-			break;
+tls_sock_ext_data_t* tls_sock_ext_get_data(pid_t pid, struct sock* sk) {
+	tls_sock_ext_data_t* it;
+	hash_for_each_possible(tls_sock_ext_data_table, it, hash, pid ^ (unsigned long)sk) {
+		if (it->pid == pid && it->sk == sk) {
+			return it;
 		}
 	}
-	return sock_op;
+	return NULL;
 }
 
-void tls_prot_init(){
-	hash_init(sock_ops_table);
+void tls_setup() {
+	hash_init(tls_sock_ext_data_table);
+	return;
+}
+
+void tls_cleanup() {
+	/* Delete all entries in the hash table */
+        int bkt;
+        tls_sock_ext_data_t* it;
+        struct hlist_node tmp;
+        struct hlist_node* tmpptr = &tmp;
+        spin_lock(&tls_sock_ext_lock);
+        hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
+                printk(KERN_INFO "Deleting data from bucket [%d] with pid %d and socket %p", bkt, it->pid, it->sk);
+                hash_del(&it->hash);
+                kfree(it->hostname);
+        }
+        spin_unlock(&tls_sock_ext_lock);
+	return;
 }
 
 int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
@@ -119,7 +136,7 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 		case HOSTNAME:
 			return set_hostname(sk, optval, len);
 		case ORIG_DEST_ADDR:
-			break;
+			return 0; /* Unimplemented */
 		default:
 			return ref_tcp_setsockopt(sk, level, optname, optval, len);
 	}
@@ -131,7 +148,7 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 		case HOSTNAME:
 			return get_hostname(sk, optval, optlen);
 		case ORIG_DEST_ADDR:
-			break;
+			return get_orig_dst(sk, optval, optlen);
 		default:
 			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
 	}
@@ -140,36 +157,34 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 
 
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
-	char *loc_host_name;
+	tls_sock_ext_data_t* sock_ext_data;
+	sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
 
 	if (optval == NULL){
 		printk(KERN_ALERT "user input is NULL");
 		goto einval_out;
 	}
 
-	loc_host_name = ((tls_sock_ops*)tls_sock_ops_get(current->pid, sk))->host_name;
-
 	if (len > MAX_HOST_LEN){
-		printk(KERN_ALERT "user input host_name too long, cutting to 255\n");
+		printk(KERN_ALERT "user input hostname too long, cutting to 255\n");
 		len = MAX_HOST_LEN;
 	}	
 
-	loc_host_name = krealloc(loc_host_name, len + 1, GFP_KERNEL);
+	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len + 1, GFP_KERNEL);
 
-	if (copy_from_user(loc_host_name, optval, len) != 0){
+	if (copy_from_user(sock_ext_data->hostname, optval, len) != 0){
 		return EFAULT;
 	}
  
-	loc_host_name[len] = '\0';	
+	sock_ext_data->hostname[len] = '\0';
 
-	if (!is_valid_test_string(optval)){
-		kfree(loc_host_name);
+	if (!is_valid_host_string(optval)) {
+		kfree(sock_ext_data->hostname);
 		printk(KERN_ALERT "user input is invalid hostname\n");
 		goto einval_out;
 	}
 
-	tls_sock_ops_get(current->pid, sk)->host_name = loc_host_name;
-	printk(KERN_ALERT "host_name registered with socket: %s\n", loc_host_name);
+	printk(KERN_ALERT "hostname registered with socket: %s\n", sock_ext_data->hostname);
 	return  0;
 
 einval_out:
@@ -178,27 +193,27 @@ einval_out:
 }
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
-	char *m_host_name;
-	size_t host_name_len;
+	char *m_hostname;
+	size_t hostname_len;
 	
-	m_host_name = tls_sock_ops_get(current->pid, sk)->host_name;
-	printk(KERN_ALERT "Host Name: %s\t%d\n", m_host_name, (int)strlen(m_host_name));
-	if (m_host_name == NULL){
+	m_hostname = tls_sock_ext_get_data(current->pid, sk)->hostname;
+	printk(KERN_ALERT "Host Name: %s\t%d\n", m_hostname, (int)strlen(m_hostname));
+	if (m_hostname == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
 		return EFAULT;
 	}
-	host_name_len = strnlen(m_host_name, MAX_HOST_LEN) + 1;
-	if ((unsigned int) *len < host_name_len){
-		printk(KERN_ALERT "len smaller than requested host_name\n");
+	hostname_len = strnlen(m_hostname, MAX_HOST_LEN) + 1;
+	if ((unsigned int) *len < hostname_len){
+		printk(KERN_ALERT "len smaller than requested hostname\n");
 		return EINVAL;	
 	} 
 	/* Check ownership of pointer and FS thingy */
-	if (copy_to_user(optval, m_host_name, host_name_len) != 0 ){
-		printk(KERN_ALERT "host_name copy to user failed\n");
+	if (copy_to_user(optval, m_hostname, hostname_len) != 0 ){
+		printk(KERN_ALERT "hostname copy to user failed\n");
 		return EFAULT;
 	}
 	
-	*len = (int)host_name_len - 1;
+	*len = (int)hostname_len - 1;
 	return 0;
 }
 
@@ -207,7 +222,7 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
  * @param	input - The void *user that was passed to setsockops
  * @return	1 if string is valid. Otherwise 0.
  */
-int is_valid_test_string(void *input) {
+int is_valid_host_string(void *input) {
         int str_len;
 	unsigned int i;
         str_len = strnlen((char *)input, 255);
@@ -220,5 +235,9 @@ int is_valid_test_string(void *input) {
 		return 0;
         }
         return 1;
+}
+
+int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
+        return 0;
 }
 

@@ -113,8 +113,8 @@ static int __init tls_init(void) {
 
 	printk(KERN_ALERT "Initializing TLS module\n");
 	
-	/* initialize tls_prot hash table */
-	tls_prot_init();
+	/* initialize our global data structures for TLS handling */
+	tls_setup();
 
 	/* Establish and register the tls_prot structure */
 	err = set_tls_prot();
@@ -185,6 +185,8 @@ static void __exit tls_exit(void) {
 
 	proto_unregister(&tls_prot);
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
+	/* Free TLS socket handling data */
+	tls_cleanup();
 }
 
 module_init(tls_init);

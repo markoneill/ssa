@@ -57,6 +57,10 @@ int main(int argc, char *argv[])
 
     // loop through all the results and connect to the first we can
     for(p = servinfo; p != NULL; p = p->ai_next) {
+	fprintf(stderr,"Attempting socket creation with socket(%s, %s, %s)\n",
+		p->ai_family == AF_INET ? "AF_INET" : "AF_INET6",
+		p->ai_socktype == SOCK_STREAM ? "SOCK_STREAM" : "SOCK_DGRAM",
+		"715 % 255" );
         if ((sockfd = socket(p->ai_family, p->ai_socktype,
                 (715 % 255))) == -1) {
             perror("client: socket");
