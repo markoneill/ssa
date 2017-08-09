@@ -3,6 +3,8 @@
  * the hash table where TLS socket options are stored.
  */
 
+#include <net/inet_sock.h>
+#include <linux/net.h>
 #include "constants.h"
 #include "tls.h"
 
@@ -13,6 +15,9 @@
 
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
+
+static DEFINE_HASHTABLE(dst_map, HASH_TABLE_BITSIZE);
+static DEFINE_SPINLOCK(dst_map_lock);
 
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -38,8 +43,32 @@ struct sockaddr_in reroute_addr = {
 };
 
 /* Overriden TLS .connect for v4 function */
-int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
-	printk(KERN_ALERT "Address: %s", uaddr->sa_data);
+int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
+	__be16 src_port;
+        struct sockaddr_in source_addr = {
+                .sin_family = AF_INET,
+                .sin_port = 0,
+                .sin_addr.s_addr = htonl(INADDR_ANY), /* can this part be more organic? */
+        };
+
+	/* Save original destination address information */
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
+	sock_ext_data->orig_dst_addr = (struct sockaddr)(*uaddr);
+	sock_ext_data->orig_dst_addrlen = addr_len;
+
+	/* Pre-emptively bind the source port so we can register it before remote connection */
+	release_sock(sk);
+        kernel_bind(sk->sk_socket, (struct sockaddr*)&source_addr, sizeof(source_addr));
+	lock_sock(sk);
+	src_port = inet_sk(sk)->inet_sport;
+
+	/* Use bound source port as the key for orig dst hash lookup */
+	sock_ext_data->remote_key = src_port;
+	spin_lock(&dst_map_lock);
+	hash_add(dst_map, &sock_ext_data->remote_hash, sock_ext_data->remote_key);
+	spin_unlock(&dst_map_lock);
+
+	printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)src_port);
 	
 	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
 }
@@ -110,6 +139,7 @@ tls_sock_ext_data_t* tls_sock_ext_get_data(pid_t pid, struct sock* sk) {
 
 void tls_setup() {
 	hash_init(tls_sock_ext_data_table);
+	hash_init(dst_map);
 	return;
 }
 
@@ -126,6 +156,8 @@ void tls_cleanup() {
                 kfree(it->hostname);
         }
         spin_unlock(&tls_sock_ext_lock);
+
+	/* XXX TODO free up dst_map resources here */
 	return;
 }
 
@@ -236,7 +268,20 @@ int is_valid_host_string(void *input) {
 }
 
 int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
+	unsigned long key;
+	unsigned long copied;
+	tls_sock_ext_data_t* it;
 	printk(KERN_ALERT "Someone called get_orig_dst\n");
+	key = inet_sk(sk)->inet_dport; /* we use dport because dport of tls daemon's client fd is sport of the app's fd */
+	hash_for_each_possible(dst_map, it, remote_hash, key) {
+		if (key == it->remote_key) {
+			*len = it->orig_dst_addrlen;
+			copied = copy_to_user(optval, &it->orig_dst_addr, it->orig_dst_addrlen);
+			printk(KERN_ALERT "Found orig dst using key %lu\n", key);
+			if (copied != it->orig_dst_addrlen) return 1;
+			else return 0;
+		}
+	}
         return 0;
 }
 

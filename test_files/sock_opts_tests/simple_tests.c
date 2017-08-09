@@ -46,5 +46,14 @@ void run_sockops_tests(void) {
 	}
 
 
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK), // 127.0.0.1
+        };
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
 	return;
 }
