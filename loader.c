@@ -53,6 +53,7 @@ static struct inet_protosw tls_stream_protosw = {
 	.flags 		= INET_PROTOSW_ICSK
 };
 
+static atomic_long_t tls_memory_allocated;
 
 /*
  *	Creates a copy of the tcp_prot structure and overrides
@@ -69,13 +70,22 @@ int set_tls_prot(void) {
         }
 
 	tls_prot = tcp_prot;
+
+	/* Guessing what the TLS-unique things should be here */
+	strcpy(tls_prot.name, "TLS");
+	tls_prot.owner = THIS_MODULE;
+	/*tls_prot.inuse_idx = 0;
+	tls_prot.memory_allocated = &tls_memory_allocated;
+	tls_prot.sockets_allocated = NULL;*/
+
+
 	tcpv6_prot = *(struct proto *)kallsyms_err;
 
 	ref_tcp_v4_connect = tls_prot.connect;
 	tls_prot.connect = tls_v4_connect;
 
 	ref_tcp_v6_connect = tcpv6_prot.connect;
-	tcpv6_prot.connect = tls_v6_connect;
+	//tcpv6_prot.connect = tls_v6_connect; /* wtf is this here? */
 
 	ref_tcp_disconnect = tls_prot.disconnect;
 	tls_prot.disconnect = tls_disconnect;
@@ -96,6 +106,7 @@ int set_tls_prot(void) {
 	tls_prot.init = tls_v4_init_sock;
 
 	tls_proto_ops = inet_stream_ops;
+	tls_proto_ops.owner = THIS_MODULE;
 	/* We're saving and overriding the tcp_prot set/getsockopt
 	 * so that we can define a "set/get original destination"
 	 * option for stream socket types */
@@ -105,6 +116,7 @@ int set_tls_prot(void) {
 	tls_prot.getsockopt = tls_getsockopt;
 	tcp_prot.setsockopt = tls_setsockopt;
 	tcp_prot.getsockopt = tls_getsockopt;
+
 
 	printk(KERN_ALERT "TLS protocol set");
 	return 0;
@@ -141,7 +153,7 @@ static int __init tls_init(void) {
 	 * and verify that it was found. If it fails, unregister the protocol
 	 * and exit the module initialization.
 	 */
-	kallsyms_err = kallsyms_lookup_name("tcp_protocol");	
+	kallsyms_err = kallsyms_lookup_name("tcp_protocol");
 	if (kallsyms_err == 0){
 		printk(KERN_ALERT "kallsyms_lookup_name failed to retrieve tcp_protocol address\n");
 		goto out_proto_unregister;
@@ -152,8 +164,8 @@ static int __init tls_init(void) {
 	ipprot = *ipprot_lookup;
 	
 
-	inet_register_protosw(&tls_stream_protosw);
 	err = inet_add_protocol(&ipprot, IPPROTO_TLS);
+	inet_register_protosw(&tls_stream_protosw);
 	
 	if (err == 0){
 		printk(KERN_INFO "Protocol insertion in inet_protos[] was successful\n");
