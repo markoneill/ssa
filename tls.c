@@ -75,17 +75,18 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 }
 
 /* Overriden TLS .connect for v6 function */
-int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len){
+int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
 }
 
 /* Overriden TLS .disconnect function */
-int tls_disconnect(struct sock *sk, int flags){
+int tls_disconnect(struct sock *sk, int flags) {
 	return (*ref_tcp_disconnect)(sk, flags);
 }
 
 /* Overriden TLS .shutdown function */
-void tls_close(struct sock *sk, long timeout){
+void tls_close(struct sock *sk, long timeout) {
+	printk(KERN_ALERT "Close called on socket %p from PID %d", sk, current->pid);
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
 	if (sock_ext_data != NULL){
 		hash_del(&sock_ext_data->hash);
@@ -152,24 +153,26 @@ void tls_setup() {
 }
 
 void tls_cleanup() {
-	/* Delete all entries in the hash table */
         int bkt;
         tls_sock_ext_data_t* it;
         struct hlist_node tmp;
         struct hlist_node* tmpptr = &tmp;
 
 	spin_lock(&dst_map_lock);
-	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash){
-	//	hash_del(&it->remote_hash);
+	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash) {
+		printk(KERN_ALERT "Deleting socket %p from PID %d from dst_map", sk, current->pid);
+		hash_del(&it->remote_hash);
 	}
 	spin_unlock(&dst_map_lock);
 
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
-                printk(KERN_INFO "Deleting data from bucket [%d] with pid %d and socket %p", bkt, it->pid, it->sk);
+		printk(KERN_ALERT "Calling close manually on socket %p from PID %d", sk, current->pid);
 		(*ref_tcp_close)(it->sk, 0);
-	//	hash_del(&it->remote_hash);
-         ///       hash_del(&it->hash);
+		printk(KERN_ALERT "Deleting socket %p from PID %d from ext_data", sk, current->pid);
+		hash_del(&it->remote_hash);
+                hash_del(&it->hash);
+		printk(KERN_ALERT "Freeing ext data for socket %p from PID %d", sk, current->pid);
                 kfree(it->hostname);
 		kfree(it);
         }
