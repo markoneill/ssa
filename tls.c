@@ -86,8 +86,8 @@ int tls_disconnect(struct sock *sk, int flags) {
 
 /* Overriden TLS .shutdown function */
 void tls_close(struct sock *sk, long timeout) {
-	printk(KERN_ALERT "Close called on socket %p from PID %d", sk, current->pid);
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
+	printk(KERN_ALERT "Close called on socket %p from PID %d", sk, current->pid);
 	if (sock_ext_data != NULL){
 		hash_del(&sock_ext_data->hash);
 		kfree(sock_ext_data->hostname);
@@ -117,7 +117,7 @@ void tls_shutdown(struct sock *sk, int how){
 int tls_v4_init_sock(struct sock *sk){
 	tls_sock_ext_data_t* sock_ext_data;
 	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL){
-		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock");
+		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock\n");
 		return -1;
 	}
 	sock_ext_data->hostname = NULL;
@@ -160,19 +160,19 @@ void tls_cleanup() {
 
 	spin_lock(&dst_map_lock);
 	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash) {
-		printk(KERN_ALERT "Deleting socket %p from PID %d from dst_map", sk, current->pid);
+		printk(KERN_ALERT "Deleting socket %p from dst_map\n", it->sk);
 		hash_del(&it->remote_hash);
 	}
 	spin_unlock(&dst_map_lock);
 
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
-		printk(KERN_ALERT "Calling close manually on socket %p from PID %d", sk, current->pid);
+		printk(KERN_ALERT "Calling close manually on socket %p\n", it->sk);
 		(*ref_tcp_close)(it->sk, 0);
-		printk(KERN_ALERT "Deleting socket %p from PID %d from ext_data", sk, current->pid);
+		printk(KERN_ALERT "Deleting socket %p from ext_data\n", it->sk);
 		hash_del(&it->remote_hash);
                 hash_del(&it->hash);
-		printk(KERN_ALERT "Freeing ext data for socket %p from PID %d", sk, current->pid);
+		printk(KERN_ALERT "Freeing ext data for socket %p\n", it->sk);
                 kfree(it->hostname);
 		kfree(it);
         }
@@ -212,7 +212,7 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
 
 	if (optval == NULL){
-		printk(KERN_ALERT "user input is NULL");
+		printk(KERN_ALERT "user input is NULL\n");
 		goto einval_out;
 	}
 
