@@ -54,6 +54,9 @@ static struct inet_protosw tls_stream_protosw = {
 };
 
 static atomic_long_t tls_memory_allocated;
+struct percpu_counter tls_orphan_count;
+struct percpu_counter tls_sockets_allocated;
+
 
 /*
  *	Creates a copy of the tcp_prot structure and overrides
@@ -74,9 +77,12 @@ int set_tls_prot(void) {
 	/* Guessing what the TLS-unique things should be here */
 	strcpy(tls_prot.name, "TLS");
 	tls_prot.owner = THIS_MODULE;
-	/*tls_prot.inuse_idx = 0;
+	/*tls_prot.inuse_idx = 0;*/
 	tls_prot.memory_allocated = &tls_memory_allocated;
-	tls_prot.sockets_allocated = NULL;*/
+	tls_prot.orphan_count = &tls_orphan_count;
+	tls_prot.sockets_allocated = &tls_sockets_allocated;
+	percpu_counter_init(&tls_orphan_count, 0, GFP_KERNEL);
+	percpu_counter_init(&tls_sockets_allocated, 0, GFP_KERNEL);
 
 
 	tcpv6_prot = *(struct proto *)kallsyms_err;
@@ -188,6 +194,9 @@ out_proto_unregister:
 }
 
 static void __exit tls_exit(void) {
+	percpu_counter_destroy(&tls_orphan_count);
+	percpu_counter_destroy(&tls_sockets_allocated);
+
 	/* Unregister the protocols and structs in the reverse order they were registered */
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
 	inet_unregister_protosw(&tls_stream_protosw);
