@@ -87,7 +87,7 @@ int tls_disconnect(struct sock *sk, int flags) {
 /* Overriden TLS .shutdown function */
 void tls_close(struct sock *sk, long timeout) {
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
-	printk(KERN_ALERT "Close called on socket %p from PID %d", sk, current->pid);
+	printk(KERN_ALERT "Close called on socket %p from PID %d\n", sk, current->pid);
 	if (sock_ext_data != NULL) {
 		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
 		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */

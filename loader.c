@@ -144,7 +144,7 @@ static int __init tls_init(void) {
 		goto out;
 	}
 
-	err = proto_register(&tls_prot, 1);
+	err = proto_register(&tls_prot, 0);
 
 	if (err == 0){
 		printk(KERN_INFO "Protocol registration was successful\n");
