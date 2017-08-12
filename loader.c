@@ -40,6 +40,7 @@ int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonb
                         int flags, int *addr_len);
 int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 int (*ref_tcp_v4_init_sock)(struct sock *sk);
+void (*ref_tcp_v4_destroy_sock)(struct sock *sk);
 void (*ref_tcp_close)(struct sock *sk, long timeout);
 int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
@@ -77,7 +78,7 @@ int set_tls_prot(void) {
 	/* Guessing what the TLS-unique things should be here */
 	strcpy(tls_prot.name, "TLS");
 	tls_prot.owner = THIS_MODULE;
-	/*tls_prot.inuse_idx = 0;*/
+	tls_prot.inuse_idx = 0;
 	tls_prot.memory_allocated = &tls_memory_allocated;
 	tls_prot.orphan_count = &tls_orphan_count;
 	tls_prot.sockets_allocated = &tls_sockets_allocated;
@@ -110,6 +111,9 @@ int set_tls_prot(void) {
 
 	ref_tcp_v4_init_sock = tls_prot.init;
 	tls_prot.init = tls_v4_init_sock;
+
+	ref_tcp_v4_destroy_sock = tls_prot.destroy;
+	tls_prot.destroy = tls_v4_destroy_sock;
 
 	tls_proto_ops = inet_stream_ops;
 	tls_proto_ops.owner = THIS_MODULE;
@@ -213,6 +217,7 @@ static void __exit tls_exit(void) {
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 	/* Free TLS socket handling data */
 	tls_cleanup();
+	printk(KERN_ALERT "memallocated: %ld\n", proto_memory_allocated(&tls_prot));
 }
 
 module_init(tls_init);

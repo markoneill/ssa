@@ -31,13 +31,14 @@ int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 		int flags, int *addr_len);
 int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
 int tls_v4_init_sock(struct sock *sk);
+void tls_v4_destroy_sock(struct sock* sk);
 void tls_close(struct sock *sk, long timeout);
 int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
 
 /* Hash Helper functions */
-tls_sock_ext_data_t* tls_sock_ext_get_data(pid_t pid, struct sock* sk);
+tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk);
 void tls_setup(void);
 void tls_cleanup(void);
 

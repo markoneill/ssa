@@ -29,6 +29,7 @@ extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, i
 extern int (*ref_tcp_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 extern void (*ref_tcp_close)(struct sock *sk, long timeout);
 extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
+extern void (*ref_tcp_v4_destroy_sock)(struct sock *sk);
 extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
@@ -53,7 +54,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
         };
 
 	/* Save original destination address information */
-	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
 	sock_ext_data->orig_dst_addr = (struct sockaddr)(*uaddr);
 	sock_ext_data->orig_dst_addrlen = addr_len;
 
@@ -86,14 +87,8 @@ int tls_disconnect(struct sock *sk, int flags) {
 
 /* Overriden TLS .shutdown function */
 void tls_close(struct sock *sk, long timeout) {
-	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
 	printk(KERN_ALERT "Close called on socket %p from PID %d\n", sk, current->pid);
-	if (sock_ext_data != NULL) {
-		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
-		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
-		kfree(sock_ext_data->hostname);
-		kfree(sock_ext_data);
-	}	
+	printk(KERN_ALERT "timeout is %ld and state is %d\n", timeout, sk->sk_state == TCP_CLOSE ? 1 : 0);
 	(*ref_tcp_close)(sk, timeout);
 	return;
 }
@@ -124,23 +119,35 @@ int tls_v4_init_sock(struct sock *sk){
 	sock_ext_data->hostname = NULL;
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
-	sock_ext_data->key = sock_ext_data->pid ^ (unsigned long)sk;
+	sock_ext_data->key = (unsigned long)sk;
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
 	return (*ref_tcp_v4_init_sock)(sk);
 }
 
+void tls_v4_destroy_sock(struct sock* sk) {
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
+	printk(KERN_ALERT "Destroy called on socket %p from PID %d\n", sk, current->pid);
+	if (sock_ext_data != NULL) {
+		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
+		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
+		kfree(sock_ext_data->hostname);
+		kfree(sock_ext_data);
+	}
+	printk(KERN_ALERT "state is %d, socks reminaing: %d, memoryallocated: %ld\n", sk->sk_state == TCP_CLOSE ? 1 : 0, sk_sockets_allocated_read_positive(sk), sk_memory_allocated(sk));
+	return (*ref_tcp_v4_destroy_sock)(sk);
+}
+
 /**
  * Finds a socket option in the hash table
- * @param	pid - The desired socket options Process ID
  * @param	sk - A pointer to the sock struct related to the socket option
  * @return	The desired socket options if found. If not found, returns NULL
  */
-tls_sock_ext_data_t* tls_sock_ext_get_data(pid_t pid, struct sock* sk) {
+tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk) {
 	tls_sock_ext_data_t* it;
-	hash_for_each_possible(tls_sock_ext_data_table, it, hash, pid ^ (unsigned long)sk) {
-		if (it->pid == pid && it->sk == sk) {
+	hash_for_each_possible(tls_sock_ext_data_table, it, hash, (unsigned long)sk) {
+		if (it->sk == sk) {
 			return it;
 		}
 	}
@@ -169,7 +176,8 @@ void tls_cleanup() {
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
 		printk(KERN_ALERT "Calling close manually on socket %p\n", it->sk);
-		(*ref_tcp_close)(it->sk, 0);
+		//(*ref_tcp_close)(it->sk, 0);
+		(*ref_tcp_v4_destroy_sock)(it->sk);
 		printk(KERN_ALERT "Deleting socket %p from ext_data\n", it->sk);
 		hash_del(&it->remote_hash);
                 hash_del(&it->hash);
@@ -210,7 +218,7 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
-	sock_ext_data = tls_sock_ext_get_data(current->pid, sk);
+	sock_ext_data = tls_sock_ext_get_data(sk);
 
 	if (optval == NULL){
 		printk(KERN_ALERT "user input is NULL\n");
@@ -248,7 +256,7 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 	char *m_hostname;
 	size_t hostname_len;
 	
-	m_hostname = tls_sock_ext_get_data(current->pid, sk)->hostname;
+	m_hostname = tls_sock_ext_get_data(sk)->hostname;
 	printk(KERN_ALERT "Host Name: %s\t%d\n", m_hostname, (int)strlen(m_hostname));
 	if (m_hostname == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
