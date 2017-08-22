@@ -33,6 +33,8 @@ extern void (*ref_tcp_v4_destroy_sock)(struct sock *sk);
 extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
+tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk);
+
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
 int is_valid_host_string(void *input);
@@ -255,8 +257,16 @@ einval_out:
 int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 	char *m_hostname;
 	size_t hostname_len;
+	tls_sock_ext_data_t* data;
+
+	/* If this test succeeds, we're actually calling get_hostname from the TLS wrapper daemon */
+	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
+		m_hostname = data->hostname;
+	}
+	else { /* otherwise, we're calling this on a socket the calling process owns */
+		m_hostname = tls_sock_ext_get_data(sk)->hostname;
+	}
 	
-	m_hostname = tls_sock_ext_get_data(sk)->hostname;
 	printk(KERN_ALERT "Host Name: %s\t%d\n", m_hostname, (int)strlen(m_hostname));
 	if (m_hostname == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
@@ -297,20 +307,30 @@ int is_valid_host_string(void *input) {
         return 1;
 }
 
-int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
+tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk) {
 	unsigned long key;
-	unsigned long copied;
 	tls_sock_ext_data_t* it;
-	printk(KERN_ALERT "Someone called get_orig_dst\n");
+	printk(KERN_ALERT "Looking up client tls_sock_ext_data from local endpoint\n");
 	key = inet_sk(sk)->inet_dport; /* we use dport because dport of tls daemon's client fd is sport of the app's fd */
 	hash_for_each_possible(dst_map, it, remote_hash, key) {
 		if (key == it->remote_key) {
-			*len = it->orig_dst_addrlen;
-			copied = copy_to_user(optval, &it->orig_dst_addr, it->orig_dst_addrlen);
-			printk(KERN_ALERT "Found orig dst using key %lu\n", key);
-			if (copied != it->orig_dst_addrlen) return 1;
-			else return 0;
+			printk(KERN_ALERT "Found client tls_sock_ext_data\n");
+			return it;
 		}
+	}
+        return NULL;
+}
+
+int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
+	unsigned long copied;
+	tls_sock_ext_data_t* data;
+	printk(KERN_ALERT "Someone called get_orig_dst\n");
+	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
+		*len = data->orig_dst_addrlen;
+		copied = copy_to_user(optval, &data->orig_dst_addr, data->orig_dst_addrlen);
+		printk(KERN_ALERT "Found orig dst using key\n");
+		if (copied != data->orig_dst_addrlen) return 1;
+		else return 0;
 	}
         return 0;
 }
