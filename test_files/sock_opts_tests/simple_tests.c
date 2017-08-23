@@ -64,6 +64,12 @@ void run_sockops_tests(void) {
 
 void run_connect_tests(void) {
 	int sock_fd = connect_to_host("www.google.com", "443");
+	char http_request[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
+	char http_response[1024*1024];
+	memset(http_response, 0, 4096);
+	send(sock_fd, http_request, sizeof(http_request), 0);
+	recv(sock_fd, http_response, 4096, 0);
+	printf("%s", http_response);
 	close(sock_fd);
 }
 
