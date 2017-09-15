@@ -135,7 +135,7 @@ int connect_to_host_new(char* host, char* service) {
 	int sock;
 	int ret;
 	struct sockaddr_host addr;
-       	addr.sin_family = AF_INET;
+       	addr.sin_family = AF_HOSTNAME;
 	addr.sin_port = htons(atoi(service));
 	strcpy(addr.sin_addr.name, host);
 	printf("Connecting to %s:%u\n", host, ntohs(addr.sin_port));

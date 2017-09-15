@@ -17,8 +17,11 @@ typedef struct tls_sock_ext_data {
 	unsigned long remote_key; /* for orig dest lookup */
 	struct hlist_node remote_hash; /* for orig dest lookup */
 	//struct sockaddr_host orig_dst_addr;
-	struct sockaddr orig_dst_addr;
-	//char hostname_pad[255]; /* max hostname - sizeof(sockaddr) = 255 - 16 = 239 */
+	union {
+		struct sockaddr orig_dst_addr;
+		struct sockaddr_in orig_dst_addr_in;
+		struct sockaddr_host orig_dst_addr_host;
+	};
 	int orig_dst_addrlen;
         pid_t pid;
         char *hostname;
