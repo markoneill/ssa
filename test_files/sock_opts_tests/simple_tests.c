@@ -6,16 +6,19 @@
 #include <unistd.h>
 #include <errno.h>
 #include <netdb.h>
-#include "../../constants.h"
+#include "../../socktls.h"
 
 #define MAX_HOSTNAME	255
 
 void run_sockops_tests(void);
 void run_connect_tests(void);
+void run_hostname_tests(void);
 int connect_to_host(char* host, char* service);
+int connect_to_host_new(char* host, char* service);
 
 int main(int argc, char* argv[]) {
-	//run_sockops_tests();
+	run_sockops_tests();
+	run_hostname_tests();
 	run_connect_tests();
 	printf("All tests succeeded!\n");
 	return 0;
@@ -73,6 +76,18 @@ void run_connect_tests(void) {
 	close(sock_fd);
 }
 
+void run_hostname_tests(void) {
+	int sock_fd = connect_to_host_new("www.google.com", "443");
+	printf("ugh\n");
+	char http_request[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
+	char http_response[1024*1024];
+	memset(http_response, 0, 4096);
+	send(sock_fd, http_request, sizeof(http_request), 0);
+	recv(sock_fd, http_response, 4096, 0);
+	printf("%s", http_response);
+	close(sock_fd);
+}
+
 int connect_to_host(char* host, char* service) {
 	int sock;
 	int ret;
@@ -110,7 +125,29 @@ int connect_to_host(char* host, char* service) {
 	}
 	freeaddrinfo(addr_list);
 	if (addr_ptr == NULL) {
-		fprintf(stderr, "Failed to find a suitable address for connection\n");
+		fprintf(stderr, "failed to find a suitable address for connection\n");
+		exit(EXIT_FAILURE);
+	}
+	return sock;
+}
+
+int connect_to_host_new(char* host, char* service) {
+	int sock;
+	int ret;
+	struct sockaddr_host addr;
+       	addr.sin_family = AF_INET;
+	addr.sin_port = htons(atoi(service));
+	strcpy(addr.sin_addr.name, host);
+	printf("Connecting to %s:%u\n", host, ntohs(addr.sin_port));
+
+	sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TLS);
+	if (sock == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+	if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+		perror("connect");
+		close(sock);
 		exit(EXIT_FAILURE);
 	}
 	return sock;

@@ -8,6 +8,7 @@
 #include <linux/kernel.h>
 #include <linux/sched.h> // for current (pointer to task)
 #include <linux/hashtable.h>
+#include "socktls.h"
 
 /* Holds additional data needed by our TLS sockets */
 typedef struct tls_sock_ext_data {
@@ -15,7 +16,9 @@ typedef struct tls_sock_ext_data {
         struct hlist_node hash;
 	unsigned long remote_key; /* for orig dest lookup */
 	struct hlist_node remote_hash; /* for orig dest lookup */
+	//struct sockaddr_host orig_dst_addr;
 	struct sockaddr orig_dst_addr;
+	//char hostname_pad[255]; /* max hostname - sizeof(sockaddr) = 255 - 16 = 239 */
 	int orig_dst_addrlen;
         pid_t pid;
         char *hostname;

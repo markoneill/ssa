@@ -5,7 +5,7 @@
 
 #include <net/inet_sock.h>
 #include <linux/net.h>
-#include "constants.h"
+#include "socktls.h"
 #include "tls.h"
 
 #define HASH_TABLE_BITSIZE	9
@@ -57,7 +57,8 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 
 	/* Save original destination address information */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	sock_ext_data->orig_dst_addr = (struct sockaddr)(*uaddr);
+	sock_ext_data->orig_dst_addr = *((struct sockaddr*)uaddr);
+	//memcpy(&sock_ext_data->orig_dst_addr, uaddr, addr_len);
 	sock_ext_data->orig_dst_addrlen = addr_len;
 
 	/* Pre-emptively bind the source port so we can register it before remote connection */
