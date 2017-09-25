@@ -45,6 +45,11 @@ void (*ref_tcp_close)(struct sock *sk, long timeout);
 int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
+/* inet stream reference functions */
+int (*ref_inet_listen)(struct socket *sock, int backlog);
+int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags);
+int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
+
 /* The TLS protocol structure to be registered */
 static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,
@@ -116,6 +121,9 @@ int set_tls_prot(void) {
 	tls_prot.destroy = tls_v4_destroy_sock;
 
 	tls_proto_ops = inet_stream_ops;
+	tls_proto_ops.listen = tls_inet_listen;
+	tls_proto_ops.bind = tls_inet_bind;
+	//tls_proto_ops.accept = tls_inet_accept;
 	tls_proto_ops.owner = THIS_MODULE;
 	/* We're saving and overriding the tcp_prot set/getsockopt
 	 * so that we can define a "set/get original destination"

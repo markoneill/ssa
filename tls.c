@@ -22,6 +22,7 @@ static DEFINE_SPINLOCK(dst_map_lock);
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 extern int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+extern struct sock* (*ref_inet_csk_accept)(struct sock *sk, int flags, int *err);
 extern int (*ref_tcp_disconnect)(struct sock *sk, int flags);
 extern void (*ref_tcp_shutdown)(struct sock *sk, int how);
 extern int (*ref_tcp_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
@@ -32,6 +33,11 @@ extern int (*ref_tcp_v4_init_sock)(struct sock *sk);
 extern void (*ref_tcp_v4_destroy_sock)(struct sock *sk);
 extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+
+/* inet reference functions */
+extern int (*ref_inet_listen)(struct socket *sock, int backlog);
+extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags);
+extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
 tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk);
 
@@ -45,6 +51,19 @@ struct sockaddr_in reroute_addr = {
 	.sin_port = htons(REROUTE_PORT),
 	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
 };
+
+/* Original AF Inet reference functions */
+int tls_inet_listen(struct socket *sock, int backlog) {
+	return (*ref_inet_listen)(sock, backlog);
+}
+
+int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags) {
+	return (*ref_inet_accept)(sock, newsock, flags);
+}
+
+int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+	return (*ref_inet_bind)(sock, uaddr, addr_len);
+}
 
 /* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
