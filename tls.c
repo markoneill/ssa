@@ -68,7 +68,6 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 /* Overriden TLS .connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	struct sockaddr_in* addr_in = (struct sockaddr_in*)uaddr;
-	struct sockaddr_host* addr_host = (struct sockaddr_host*)uaddr;
 	__be16 src_port;
         struct sockaddr_in source_addr = {
                 .sin_family = AF_INET,
@@ -78,12 +77,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 
 	/* Save original destination address information */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	if (uaddr->sa_family == AF_HOSTNAME) {
-		sock_ext_data->orig_dst_addr_host = *addr_host;
-	}
-	else if (uaddr->sa_family == AF_INET) {
-		sock_ext_data->orig_dst_addr_in = *addr_in;
-	}
+	sock_ext_data->orig_dst_addr = *addr_in;
 	sock_ext_data->orig_dst_addrlen = addr_len;
 
 	/* Pre-emptively bind the source port so we can register it before remote connection */
