@@ -38,7 +38,7 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
 int tls_inet_listen(struct socket *sock, int backlog);
-int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags);
+int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern);
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
 /* Hash Helper functions */

@@ -36,7 +36,7 @@ extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char _
 
 /* inet reference functions */
 extern int (*ref_inet_listen)(struct socket *sock, int backlog);
-extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags);
+extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
 extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
 tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk);
@@ -57,11 +57,12 @@ int tls_inet_listen(struct socket *sock, int backlog) {
 	return (*ref_inet_listen)(sock, backlog);
 }
 
-int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags) {
-	return (*ref_inet_accept)(sock, newsock, flags);
+int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
+	return (*ref_inet_accept)(sock, newsock, flags, kern);
 }
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+	printk(KERN_ALERT "bind was called");
 	return (*ref_inet_bind)(sock, uaddr, addr_len);
 }
 
