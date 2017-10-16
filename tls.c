@@ -63,6 +63,9 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 }
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
+	BUG_ON(sock_ext_data == NULL);
+	sock_ext_data->bind_port = ((struct sockaddr_in*)uaddr)->sin_port;
 	printk(KERN_ALERT "bind was called");
 	return (*ref_inet_bind)(sock, uaddr, addr_len);
 }
@@ -143,6 +146,7 @@ int tls_v4_init_sock(struct sock *sk){
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
+	sock_ext_data->bind_port = 0;
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
