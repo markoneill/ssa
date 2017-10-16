@@ -121,6 +121,7 @@ int set_tls_prot(void) {
 	tls_prot.destroy = tls_v4_destroy_sock;
 
 	tls_proto_ops = inet_stream_ops;
+	
 	ref_inet_listen = tls_proto_ops.listen;
 	ref_inet_bind = tls_proto_ops.bind;
 	ref_inet_accept = tls_proto_ops.accept;

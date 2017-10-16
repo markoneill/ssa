@@ -1,4 +1,4 @@
-ssa-objs := tls.o loader.o
+ssa-objs := tls.o netlink.o loader.o
 obj-m += ssa.o
 
 all:

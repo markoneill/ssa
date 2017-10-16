@@ -6,6 +6,7 @@
 #include <net/inet_sock.h>
 #include <linux/net.h>
 #include "socktls.h"
+#include "netlink.h"
 #include "tls.h"
 
 #define HASH_TABLE_BITSIZE	9
