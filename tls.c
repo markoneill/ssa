@@ -55,6 +55,21 @@ struct sockaddr_in reroute_addr = {
 
 /* Original AF Inet reference functions */
 int tls_inet_listen(struct socket *sock, int backlog) {
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
+        struct sockaddr_in internal_addr = {
+                .sin_family = AF_INET,
+                .sin_port = 0,
+                .sin_addr.s_addr = htonl(INADDR_ANY),/* this should be more restricted */
+        };
+        struct sockaddr_in external_addr = {
+                .sin_family = AF_INET,
+                .sin_port = sock_ext_data->bind_port,
+                .sin_addr.s_addr = htonl(INADDR_ANY), /* this should be the addr they bound to */
+        };
+	release_sock(sock->sk);
+        kernel_bind(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
+	lock_sock(sock->sk);
+	send_listen_notify((struct sockaddr*)&internal_addr, (struct sockaddr*)&external_addr);
 	return (*ref_inet_listen)(sock, backlog);
 }
 
@@ -63,7 +78,7 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 }
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
-	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
 	BUG_ON(sock_ext_data == NULL);
 	sock_ext_data->bind_port = ((struct sockaddr_in*)uaddr)->sin_port;
 	printk(KERN_ALERT "bind was called");
@@ -182,6 +197,7 @@ tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk) {
 }
 
 void tls_setup() {
+	register_netlink();
 	hash_init(tls_sock_ext_data_table);
 	hash_init(dst_map);
 	return;
@@ -214,7 +230,8 @@ void tls_cleanup() {
         }
         spin_unlock(&tls_sock_ext_lock);
 
-	
+	unregister_netlink();
+
 	return;
 }
 
