@@ -17,12 +17,13 @@ void run_hostname_tests(void);
 int connect_to_host(char* host, char* service);
 int connect_to_host_new(char* host, char* service);
 int create_server_socket(char* port, int protocol);
+int create_server_socket_new(int port);
 
 int main(int argc, char* argv[]) {
-	run_sockops_tests();
+	//run_sockops_tests();
 	//run_hostname_tests();
 	run_listen_tests();
-	run_connect_tests();
+	//run_connect_tests();
 	printf("All tests succeeded!\n");
 	return 0;
 }
@@ -69,7 +70,7 @@ void run_sockops_tests(void) {
 }
 
 void run_listen_tests(void) {
-	int sock_fd = create_server_socket("3333", SOCK_STREAM);
+	int sock_fd = create_server_socket_new(3333);
 	return;
 }
 
@@ -170,7 +171,7 @@ int create_server_socket(char* port, int protocol) {
 	struct addrinfo* addr_list;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = protocol;
 	/* AI_PASSIVE for filtering out addresses on which we
 	 * can't use for servers
@@ -234,5 +235,41 @@ int create_server_socket(char* port, int protocol) {
 		exit(EXIT_FAILURE);
 	}
 
+	return sock;
+}
+
+int create_server_socket_new(int port) {
+	int ret;
+	int sock;
+	struct sockaddr_in addr;
+	int optval = 1;
+       	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
+	if (sock == -1) {
+		perror("socket");
+		return -1;
+	}
+	ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+	if (ret == -1) {
+		perror("setsockopt");
+		close(sock);
+		return -1;
+	}
+
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	ret = bind(sock, (struct sockaddr*)&addr, sizeof(addr));
+	if (ret == -1) {
+		perror("bind");
+		close(sock);
+		return -1;
+	}
+
+	ret = listen(sock, SOMAXCONN);
+	if (ret == -1) {
+		perror("listen");
+		close(sock);
+		return -1;
+	}
 	return sock;
 }
