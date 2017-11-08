@@ -157,6 +157,7 @@ int tls_v4_init_sock(struct sock *sk){
 		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock\n");
 		return -1;
 	}
+	memset(sock_ext_data, 0, sizeof(tls_sock_ext_data_t));
 	sock_ext_data->hostname = NULL;
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
@@ -174,7 +175,9 @@ void tls_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data != NULL) {
 		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
 		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
-		kfree(sock_ext_data->hostname);
+		if (sock_ext_data->hostname) {
+			kfree(sock_ext_data->hostname);
+		}
 		kfree(sock_ext_data);
 	}
 	printk(KERN_ALERT "state is %d, socks reminaing: %d, memoryallocated: %ld\n", sk->sk_state == TCP_CLOSE ? 1 : 0, sk_sockets_allocated_read_positive(sk), sk_memory_allocated(sk));
