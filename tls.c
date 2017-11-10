@@ -55,6 +55,7 @@ struct sockaddr_in reroute_addr = {
 
 /* Original AF Inet reference functions */
 int tls_inet_listen(struct socket *sock, int backlog) {
+	__be16 src_port;
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
         struct sockaddr_in internal_addr = {
                 .sin_family = AF_INET,
@@ -66,9 +67,9 @@ int tls_inet_listen(struct socket *sock, int backlog) {
                 .sin_port = sock_ext_data->bind_port,
                 .sin_addr.s_addr = htonl(INADDR_ANY), /* this should be the addr they bound to */
         };
-	//release_sock(sock->sk);
-        //kernel_bind(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
-	//lock_sock(sock->sk);
+        kernel_bind(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
+	src_port = inet_sk(sock->sk)->inet_sport;
+	internal_addr.sin_port = src_port;
 	send_listen_notify((struct sockaddr*)&internal_addr, (struct sockaddr*)&external_addr);
 	return (*ref_inet_listen)(sock, backlog);
 }
@@ -78,14 +79,28 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 }
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+        struct sockaddr_in internal_addr = {
+                .sin_family = AF_INET,
+                .sin_port = 0,
+                .sin_addr.s_addr = htonl(INADDR_ANY),/* this should be more restricted */
+        };
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
 	BUG_ON(sock_ext_data == NULL);
-	sock_ext_data->bind_port = ((struct sockaddr_in*)uaddr)->sin_port;
 	printk(KERN_ALERT "bind was called");
-	return (*ref_inet_bind)(sock, uaddr, addr_len);
+	if (sock_ext_data->bind_port == 0) {
+		/* Save the desired bind port in our tls sock storage */
+		sock_ext_data->bind_port = ((struct sockaddr_in*)uaddr)->sin_port;
+	}
+
+	/* Bind to the next available port, not what the app wanted */
+	/* XXX Note that this mechanism does allow for an application to request
+	 * binding to an in-use port and then be told the operation was sucessful.
+	 * We should change this to synchronously interact with the userspace TLS daemon
+	 * to let us know whether or not the bind really was sucessful. */
+	return (*ref_inet_bind)(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
 }
 
-/* Overriden TLS .connect for v4 function */
+/* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	__be16 src_port;
         struct sockaddr_in source_addr = {
@@ -116,17 +131,17 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
 }
 
-/* Overriden TLS .connect for v6 function */
+/* Overriden TLS connect for v6 function */
 int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	return (*ref_tcp_v6_connect)(sk, uaddr, addr_len);
 }
 
-/* Overriden TLS .disconnect function */
+/* Overriden TLS disconnect function */
 int tls_disconnect(struct sock *sk, int flags) {
 	return (*ref_tcp_disconnect)(sk, flags);
 }
 
-/* Overriden TLS .shutdown function */
+/* Overriden TLS shutdown function */
 void tls_close(struct sock *sk, long timeout) {
 	printk(KERN_ALERT "Close called on socket %p from PID %d\n", sk, current->pid);
 	printk(KERN_ALERT "timeout is %ld and state is %d\n", timeout, sk->sk_state == TCP_CLOSE ? 1 : 0);
@@ -134,23 +149,23 @@ void tls_close(struct sock *sk, long timeout) {
 	return;
 }
 
-/* Overriden TLS .recvmsg function */
+/* Overriden TLS recvmsg function */
 int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 		int flags, int *addr_len){
 	return (*ref_tcp_recvmsg)(sk, msg, len, nonblock, flags, addr_len);
 }
 
-/* Overriden TLS .sendmsg function */
+/* Overriden TLS sendmsg function */
 int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size){
 	return (*ref_tcp_sendmsg)(sk, msg, size);
 }
 
-/* Overriden TLS .shutodwn function */
+/* Overriden TLS shutodwn function */
 void tls_shutdown(struct sock *sk, int how){
 	return (*ref_tcp_shutdown)(sk, how);
 }
 
-/* Overriden TLS .init function */
+/* Overriden TLS init function */
 int tls_v4_init_sock(struct sock *sk){
 	tls_sock_ext_data_t* sock_ext_data;
 	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL){

@@ -37,7 +37,7 @@ static struct genl_family ssa_nl_family = {
 };
 
 int nl_fail(struct sk_buff* skb, struct genl_info* info) {
-        printk(KERN_ALERT "Kernel receieved an SSA netlink notificatio. This should never happen.\n");
+        printk(KERN_ALERT "Kernel receieved an SSA netlink notification. This should never happen.\n");
         return -1;
 }
  
@@ -55,7 +55,7 @@ int send_listen_notify(struct sockaddr* internal, struct sockaddr* external) {
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(sizeof(struct sockaddr) * 2, GFP_ATOMIC);
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new\n");
 		return -1;
