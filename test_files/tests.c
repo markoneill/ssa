@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <netdb.h>
-#include "../../socktls.h"
+#include "../socktls.h"
 
 #define MAX_HOSTNAME	255
 
