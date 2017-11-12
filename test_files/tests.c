@@ -9,11 +9,13 @@
 #include "../socktls.h"
 
 #define MAX_HOSTNAME	255
+#define BUFFER_MAX	1024
 
 void run_sockops_tests(void);
 void run_connect_tests(void);
 void run_listen_tests(void);
 void run_hostname_tests(void);
+void handle_client(int sock, struct sockaddr_storage client_addr, socklen_t addr_len);
 int connect_to_host(char* host, char* service);
 int connect_to_host_new(char* host, char* service);
 int create_server_socket(char* port, int protocol);
@@ -71,6 +73,43 @@ void run_sockops_tests(void) {
 
 void run_listen_tests(void) {
 	int sock_fd = create_server_socket_new(3333);
+	struct sockaddr_storage client_addr;
+	socklen_t client_addr_len = sizeof(client_addr);
+	int client = accept(sock_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+	if (client == -1) {
+		perror("accept");
+		return;
+	}
+	handle_client(client, client_addr, client_addr_len);
+	close(sock_fd);
+	return;
+}
+
+void handle_client(int sock, struct sockaddr_storage client_addr, socklen_t addr_len) {
+	unsigned char buffer[BUFFER_MAX];
+	char client_hostname[NI_MAXHOST];
+	char client_port[NI_MAXSERV];
+	int ret = getnameinfo((struct sockaddr*)&client_addr, addr_len, client_hostname,
+		       NI_MAXHOST, client_port, NI_MAXSERV, 0);
+	if (ret != 0) {
+		fprintf(stderr, "Failed in getnameinfo: %s\n", gai_strerror(ret));
+	}
+	printf("Got a connection from %s:%s\n", client_hostname, client_port);
+	while (1) {
+		int bytes_read = recv(sock, buffer, BUFFER_MAX-1, 0);
+		if (bytes_read == 0) {
+			printf("Peer disconnected\n");
+			close(sock);
+			return;
+		}
+		if (bytes_read < 0) {
+			perror("recv");
+			continue;
+		}
+		buffer[bytes_read] = '\0';
+		printf("received: %s\n", buffer);
+		send(sock, buffer, strlen(buffer)+1, 0);
+	}
 	return;
 }
 
