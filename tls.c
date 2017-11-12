@@ -60,7 +60,7 @@ int tls_inet_listen(struct socket *sock, int backlog) {
         struct sockaddr_in internal_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
-                .sin_addr.s_addr = htonl(INADDR_ANY),/* this should be more restricted */
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
         struct sockaddr_in external_addr = {
                 .sin_family = AF_INET,
