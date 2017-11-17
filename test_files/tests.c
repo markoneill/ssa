@@ -15,17 +15,25 @@ void run_sockops_tests(void);
 void run_connect_tests(void);
 void run_listen_tests(void);
 void run_hostname_tests(void);
+
+void run_connect_benchmark(void);
+void run_connect_baseline(void);
+
 void handle_client(int sock, struct sockaddr_storage client_addr, socklen_t addr_len);
 int connect_to_host(char* host, char* service);
 int connect_to_host_new(char* host, char* service);
 int create_server_socket(char* port, int protocol);
 int create_server_socket_new(int port);
 
+int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y);
+
 int main(int argc, char* argv[]) {
-	run_sockops_tests();
+	//run_sockops_tests();
 	//run_hostname_tests();
-	run_listen_tests();
-	run_connect_tests();
+	//run_listen_tests();
+	//run_connect_tests();
+	run_connect_baseline();
+	run_connect_benchmark();
 	printf("All tests succeeded!\n");
 	return 0;
 }
@@ -82,6 +90,57 @@ void run_listen_tests(void) {
 	}
 	handle_client(client, client_addr, client_addr_len);
 	close(sock_fd);
+	return;
+}
+
+void run_connect_baseline(void) {
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock_fd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK), // 127.0.0.1
+        };
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("[Vanilla] Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
+	gettimeofday(&tv, NULL);
+	printf("[Vanilla] After connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	return;
+}
+
+void run_connect_benchmark(void) {
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
+	if (sock_fd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+	const char hostname[] = "www.google.com";
+        if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+		perror("setsockopt: SO_HOSTNAME");
+		exit(EXIT_FAILURE);
+	}
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK), // 127.0.0.1
+        };
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
 	return;
 }
 
@@ -311,4 +370,27 @@ int create_server_socket_new(int port) {
 		return -1;
 	}
 	return sock;
+}
+
+int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y) {
+	struct timeval y_cpy = *y;
+	/* Perform the carry for the later subtraction by updating y_cpy. */
+	if (x->tv_usec < y_cpy.tv_usec) {
+		int nsec = (y_cpy.tv_usec - x->tv_usec) / 1000000 + 1;
+		y_cpy.tv_usec -= 1000000 * nsec;
+		y_cpy.tv_sec += nsec;
+	}
+	if (x->tv_usec - y_cpy.tv_usec > 1000000) {
+		int nsec = (x->tv_usec - y_cpy.tv_usec) / 1000000;
+		y_cpy.tv_usec += 1000000 * nsec;
+		y_cpy.tv_sec -= nsec;
+	}
+
+	/* Compute the time remaining to wait.
+	 * tv_usec is certainly positive. */
+	result->tv_sec = x->tv_sec - y_cpy.tv_sec;
+	result->tv_usec = x->tv_usec - y_cpy.tv_usec;
+
+	/* Return 1 if result is negative. */
+	return x->tv_sec < y_cpy.tv_sec;
 }
