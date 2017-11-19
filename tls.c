@@ -70,7 +70,8 @@ int tls_inet_listen(struct socket *sock, int backlog) {
         };
 
 	if (sock_ext_data->has_bound == 0) {
-        	kernel_bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		(*ref_inet_bind)(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+        	//kernel_bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
@@ -158,7 +159,8 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	 * bind already */
 	if (sock_ext_data->has_bound == 0) {
 		release_sock(sk);
-	        kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		(*ref_inet_bind)(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		//kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		lock_sock(sk);
 		src_port = inet_sk(sk)->inet_sport;
 		sock_ext_data->remote_key = src_port;

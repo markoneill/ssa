@@ -110,6 +110,7 @@ int send_socket_notification(unsigned long id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	printk(KERN_ALERT "[socket] id is %lu\n", id);
 
 	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 	if (skb == NULL) {
@@ -182,6 +183,7 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	printk(KERN_ALERT "[connect] id is %lu\n", id);
 
 	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 	if (skb == NULL) {
