@@ -6,8 +6,11 @@
 // Attributes
 enum {
         SSA_NL_A_UNSPEC,
+	SSA_NL_A_ID,
 	SSA_NL_A_SOCKADDR_INTERNAL,
 	SSA_NL_A_SOCKADDR_EXTERNAL,
+	SSA_NL_A_SOCKADDR_REMOTE,
+	SSA_NL_A_RETURN,
         SSA_NL_A_PAD,
         __SSA_NL_A_MAX,
 };
@@ -17,7 +20,11 @@ enum {
 // Operations
 enum {
         SSA_NL_C_UNSPEC,
-        SSA_NL_C_NOTIFY,
+        SSA_NL_C_SOCKET_NOTIFY,
+        SSA_NL_C_BIND_NOTIFY,
+        SSA_NL_C_CONNECT_NOTIFY,
+        SSA_NL_C_LISTEN_NOTIFY,
+	SSA_NL_C_RETURN,
         __SSA_NL_C_MAX,
 };
 
@@ -30,7 +37,10 @@ enum ssa_nl_groups {
 
 
 int register_netlink(void);
-int send_listen_notify(struct sockaddr* internal, struct sockaddr* external);
+int send_socket_notification(unsigned long id);
+int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
+int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr);
+int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
 void unregister_netlink(void);
 
 #endif

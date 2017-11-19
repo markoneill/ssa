@@ -31,9 +31,9 @@ int main(int argc, char* argv[]) {
 	//run_sockops_tests();
 	//run_hostname_tests();
 	//run_listen_tests();
-	//run_connect_tests();
-	run_connect_baseline();
-	run_connect_benchmark();
+	run_connect_tests();
+	//run_connect_baseline();
+	//run_connect_benchmark();
 	printf("All tests succeeded!\n");
 	return 0;
 }

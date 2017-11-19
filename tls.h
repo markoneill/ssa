@@ -1,14 +1,8 @@
 #ifndef TLS_H
 #define TLS_H
 
-#include <linux/socket.h>
-#include <net/sock.h>
-#include <linux/export.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/sched.h> // for current (pointer to task)
 #include <linux/hashtable.h>
-#include "socktls.h"
+#include <linux/completion.h>
 
 /* Holds additional data needed by our TLS sockets */
 typedef struct tls_sock_ext_data {
@@ -16,12 +10,18 @@ typedef struct tls_sock_ext_data {
         struct hlist_node hash;
 	unsigned long remote_key; /* for orig dest lookup */
 	struct hlist_node remote_hash; /* for orig dest lookup */
-	struct sockaddr orig_dst_addr;
-	int orig_dst_addrlen;
-	unsigned short bind_port; /* zero if no bind called */
+	struct sockaddr ext_addr;
+	int ext_addrlen;
+	struct sockaddr int_addr;
+	int int_addrlen;
+	struct sockaddr rem_addr;
+	int rem_addrlen;
+	int has_bound; /* zero if no bind explicitly called  by app */
         pid_t pid;
         char *hostname;
         struct sock* sk;
+	struct completion sock_event;
+	int response;
 } tls_sock_ext_data_t;
 
 /* Corresponding TLS override functions */
@@ -46,5 +46,6 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk);
 void tls_setup(void);
 void tls_cleanup(void);
+void report_return(unsigned long key, int ret);
 
 #endif

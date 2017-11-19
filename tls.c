@@ -5,14 +5,16 @@
 
 #include <net/inet_sock.h>
 #include <linux/net.h>
+#include <linux/completion.h>
 #include "socktls.h"
 #include "netlink.h"
 #include "tls.h"
 
+#define RESPONSE_TIMEOUT	HZ
 #define HASH_TABLE_BITSIZE	9
 #define REROUTE_PORT		8443
 
-#define MAX_HOST_LEN	255
+#define MAX_HOST_LEN		255
 
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
@@ -55,22 +57,38 @@ struct sockaddr_in reroute_addr = {
 
 /* Original AF Inet reference functions */
 int tls_inet_listen(struct socket *sock, int backlog) {
-	__be16 src_port;
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
-        struct sockaddr_in internal_addr = {
+        struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
                 .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
-        struct sockaddr_in external_addr = {
+        struct sockaddr_in ext_addr = {
                 .sin_family = AF_INET,
-                .sin_port = sock_ext_data->bind_port,
-                .sin_addr.s_addr = htonl(INADDR_ANY), /* this should be the addr they bound to */
+                .sin_port = 0,
+                .sin_addr.s_addr = htonl(INADDR_ANY),
         };
-        kernel_bind(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
-	src_port = inet_sk(sock->sk)->inet_sport;
-	internal_addr.sin_port = src_port;
-	send_listen_notify((struct sockaddr*)&internal_addr, (struct sockaddr*)&external_addr);
+
+	if (sock_ext_data->has_bound == 0) {
+        	kernel_bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
+		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
+		sock_ext_data->int_addrlen = sizeof(int_addr);
+		memcpy(&sock_ext_data->ext_addr, &ext_addr, sizeof(ext_addr));
+		sock_ext_data->ext_addrlen = sizeof(ext_addr);
+		sock_ext_data->has_bound = 1;
+	}
+	send_listen_notification((unsigned long)sock->sk, 
+			(struct sockaddr*)&sock_ext_data->int_addr,
+		        (struct sockaddr*)&sock_ext_data->ext_addr);
+
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EADDRINUSE;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
 	return (*ref_inet_listen)(sock, backlog);
 }
 
@@ -79,55 +97,91 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 }
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
-        struct sockaddr_in internal_addr = {
+	int ret;
+        struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
-                .sin_addr.s_addr = htonl(INADDR_ANY),/* this should be more restricted */
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
+
+	/* We disregard the address the application wants to bind to in favor
+	 * of one assigned by the system (using sin_port = 0 on localhost),
+	 * so that we can have the TLS wrapper daemon bind to the actual one */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
 	BUG_ON(sock_ext_data == NULL);
 	printk(KERN_ALERT "bind was called");
-	if (sock_ext_data->bind_port == 0) {
-		/* Save the desired bind port in our tls sock storage */
-		sock_ext_data->bind_port = ((struct sockaddr_in*)uaddr)->sin_port;
+	ret = (*ref_inet_bind)(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+
+	/* We can use the port number now because inet_bind will have set
+	 * it for us */
+	int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
+	sock_ext_data->remote_key = int_addr.sin_port;
+	printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)sock_ext_data->remote_key);
+
+	/* We only want to continue if the internal socket bind succeeds */
+	if (ret != 0) {
+		return ret;
 	}
 
-	/* Bind to the next available port, not what the app wanted */
-	/* XXX Note that this mechanism does allow for an application to request
-	 * binding to an in-use port and then be told the operation was sucessful.
-	 * We should change this to synchronously interact with the userspace TLS daemon
-	 * to let us know whether or not the bind really was sucessful. */
-	return (*ref_inet_bind)(sock, (struct sockaddr*)&internal_addr, sizeof(internal_addr));
+	send_bind_notification((unsigned long)sock->sk, (struct sockaddr*)&int_addr, (struct sockaddr*)uaddr);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EADDRINUSE;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
+	sock_ext_data->has_bound = 1;
+	memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
+	sock_ext_data->int_addrlen = sizeof(int_addr);
+	sock_ext_data->ext_addr = *uaddr;
+	sock_ext_data->ext_addrlen = addr_len;
+	return 0;
 }
 
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	__be16 src_port;
-        struct sockaddr_in source_addr = {
+        struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
-                .sin_addr.s_addr = htonl(INADDR_ANY), /* can this part be more organic? */
+                .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
 
 	/* Save original destination address information */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	sock_ext_data->orig_dst_addr = (struct sockaddr)(*uaddr);
-	sock_ext_data->orig_dst_addrlen = addr_len;
+	sock_ext_data->rem_addr = (struct sockaddr)(*uaddr);
+	sock_ext_data->rem_addrlen = addr_len;
 
-	/* Pre-emptively bind the source port so we can register it before remote connection */
-	release_sock(sk);
-        kernel_bind(sk->sk_socket, (struct sockaddr*)&source_addr, sizeof(source_addr));
-	lock_sock(sk);
-	src_port = inet_sk(sk)->inet_sport;
+	/* Pre-emptively bind the source port so we can register it before remote
+	 * connection. We only do this if the application hasn't explicitly called
+	 * bind already */
+	if (sock_ext_data->has_bound == 0) {
+		release_sock(sk);
+	        kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		lock_sock(sk);
+		src_port = inet_sk(sk)->inet_sport;
+		sock_ext_data->remote_key = src_port;
+		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
+		sock_ext_data->int_addrlen = sizeof(int_addr);
+		sock_ext_data->has_bound = 1;
+		printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)src_port);
+	}
 
-	/* Use bound source port as the key for orig dst hash lookup */
-	sock_ext_data->remote_key = src_port;
+	/* Use bound source port as the key for rem_addr hash lookup */
 	spin_lock(&dst_map_lock);
 	hash_add(dst_map, &sock_ext_data->remote_hash, sock_ext_data->remote_key);
 	spin_unlock(&dst_map_lock);
 
-	printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)src_port);
 	
+	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EHOSTUNREACH;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
 	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
 }
 
@@ -166,22 +220,27 @@ void tls_shutdown(struct sock *sk, int how){
 }
 
 /* Overriden TLS init function */
-int tls_v4_init_sock(struct sock *sk){
+int tls_v4_init_sock(struct sock *sk) {
+	int ret;
 	tls_sock_ext_data_t* sock_ext_data;
-	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL){
+	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock\n");
 		return -1;
 	}
 	memset(sock_ext_data, 0, sizeof(tls_sock_ext_data_t));
-	sock_ext_data->hostname = NULL;
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
-	sock_ext_data->bind_port = 0;
+	init_completion(&sock_ext_data->sock_event);
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
-	return (*ref_tcp_v4_init_sock)(sk);
+	ret = (*ref_tcp_v4_init_sock)(sk);
+
+	send_socket_notification((unsigned long)sk);
+	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
+	/* We're not checking return values here because init_sock always returns 0 */
+	return ret;
 }
 
 void tls_v4_destroy_sock(struct sock* sk) {
@@ -386,12 +445,21 @@ int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
 	tls_sock_ext_data_t* data;
 	printk(KERN_ALERT "Someone called get_orig_dst\n");
 	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
-		*len = data->orig_dst_addrlen;
-		copied = copy_to_user(optval, &data->orig_dst_addr, data->orig_dst_addrlen);
+		*len = data->rem_addrlen;
+		copied = copy_to_user(optval, &data->rem_addr, data->rem_addrlen);
 		printk(KERN_ALERT "Found orig dst using key\n");
-		if (copied != data->orig_dst_addrlen) return 1;
+		if (copied != data->rem_addrlen) return 1;
 		else return 0;
 	}
         return 0;
+}
+
+void report_return(unsigned long key, int ret) {
+	tls_sock_ext_data_t* sock_ext_data;
+	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
+	BUG_ON(sock_ext_data == NULL);
+	sock_ext_data->response = ret;
+	complete(&sock_ext_data->sock_event);
+	return;
 }
 
