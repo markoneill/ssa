@@ -142,7 +142,6 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
-	__be16 src_port;
         struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
@@ -162,12 +161,12 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		(*ref_inet_bind)(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		//kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		lock_sock(sk);
-		src_port = inet_sk(sk)->inet_sport;
-		sock_ext_data->remote_key = src_port;
+		int_addr.sin_port = inet_sk(sk)->inet_sport;
+		sock_ext_data->remote_key = int_addr.sin_port;
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
 		sock_ext_data->has_bound = 1;
-		printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)src_port);
+		printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)int_addr.sin_port);
 	}
 
 	/* Use bound source port as the key for rem_addr hash lookup */
