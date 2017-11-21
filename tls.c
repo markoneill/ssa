@@ -110,14 +110,12 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	 * so that we can have the TLS wrapper daemon bind to the actual one */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
 	BUG_ON(sock_ext_data == NULL);
-	printk(KERN_ALERT "bind was called");
 	ret = (*ref_inet_bind)(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
 
 	/* We can use the port number now because inet_bind will have set
 	 * it for us */
 	int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
 	sock_ext_data->remote_key = int_addr.sin_port;
-	printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)sock_ext_data->remote_key);
 
 	/* We only want to continue if the internal socket bind succeeds */
 	if (ret != 0) {
@@ -166,7 +164,6 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
 		sock_ext_data->has_bound = 1;
-		printk(KERN_ALERT "Adding source port %lu to map\n", (unsigned long)int_addr.sin_port);
 	}
 
 	/* Use bound source port as the key for rem_addr hash lookup */
@@ -198,8 +195,6 @@ int tls_disconnect(struct sock *sk, int flags) {
 
 /* Overriden TLS shutdown function */
 void tls_close(struct sock *sk, long timeout) {
-	printk(KERN_ALERT "Close called on socket %p from PID %d\n", sk, current->pid);
-	printk(KERN_ALERT "timeout is %ld and state is %d\n", timeout, sk->sk_state == TCP_CLOSE ? 1 : 0);
 	(*ref_tcp_close)(sk, timeout);
 	return;
 }
@@ -246,7 +241,6 @@ int tls_v4_init_sock(struct sock *sk) {
 
 void tls_v4_destroy_sock(struct sock* sk) {
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	printk(KERN_ALERT "Destroy called on socket %p from PID %d\n", sk, current->pid);
 	if (sock_ext_data != NULL) {
 		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
 		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
@@ -255,7 +249,6 @@ void tls_v4_destroy_sock(struct sock* sk) {
 		}
 		kfree(sock_ext_data);
 	}
-	printk(KERN_ALERT "state is %d, socks reminaing: %d, memoryallocated: %ld\n", sk->sk_state == TCP_CLOSE ? 1 : 0, sk_sockets_allocated_read_positive(sk), sk_memory_allocated(sk));
 	return (*ref_tcp_v4_destroy_sock)(sk);
 }
 
@@ -289,20 +282,16 @@ void tls_cleanup() {
 
 	spin_lock(&dst_map_lock);
 	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash) {
-		printk(KERN_ALERT "Deleting socket %p from dst_map\n", it->sk);
 		hash_del(&it->remote_hash);
 	}
 	spin_unlock(&dst_map_lock);
 
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
-		printk(KERN_ALERT "Calling close manually on socket %p\n", it->sk);
 		//(*ref_tcp_close)(it->sk, 0);
 		(*ref_tcp_v4_destroy_sock)(it->sk);
-		printk(KERN_ALERT "Deleting socket %p from ext_data\n", it->sk);
 		hash_del(&it->remote_hash);
                 hash_del(&it->hash);
-		printk(KERN_ALERT "Freeing ext data for socket %p\n", it->sk);
                 kfree(it->hostname);
 		kfree(it);
         }
@@ -430,11 +419,9 @@ int is_valid_host_string(void *input) {
 tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk) {
 	unsigned long key;
 	tls_sock_ext_data_t* it;
-	printk(KERN_ALERT "Looking up client tls_sock_ext_data from local endpoint\n");
 	key = inet_sk(sk)->inet_dport; /* we use dport because dport of tls daemon's client fd is sport of the app's fd */
 	hash_for_each_possible(dst_map, it, remote_hash, key) {
 		if (key == it->remote_key) {
-			printk(KERN_ALERT "Found client tls_sock_ext_data\n");
 			return it;
 		}
 	}
@@ -444,11 +431,9 @@ tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk) {
 int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
 	unsigned long copied;
 	tls_sock_ext_data_t* data;
-	printk(KERN_ALERT "Someone called get_orig_dst\n");
 	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
 		*len = data->rem_addrlen;
 		copied = copy_to_user(optval, &data->rem_addr, data->rem_addrlen);
-		printk(KERN_ALERT "Found orig dst using key\n");
 		if (copied != data->rem_addrlen) return 1;
 		else return 0;
 	}
