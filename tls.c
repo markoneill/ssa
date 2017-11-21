@@ -63,11 +63,11 @@ int tls_inet_listen(struct socket *sock, int backlog) {
                 .sin_port = 0,
                 .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
-        struct sockaddr_in ext_addr = {
+	/*struct sockaddr_in ext_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
                 .sin_addr.s_addr = htonl(INADDR_ANY),
-        };
+        };*/
 
 	if (sock_ext_data->has_bound == 0) {
 		(*ref_inet_bind)(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
@@ -75,8 +75,8 @@ int tls_inet_listen(struct socket *sock, int backlog) {
 		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
-		memcpy(&sock_ext_data->ext_addr, &ext_addr, sizeof(ext_addr));
-		sock_ext_data->ext_addrlen = sizeof(ext_addr);
+		//memcpy(&sock_ext_data->ext_addr, &ext_addr, sizeof(ext_addr));
+		//sock_ext_data->ext_addrlen = sizeof(ext_addr);
 		sock_ext_data->has_bound = 1;
 	}
 	send_listen_notification((unsigned long)sock->sk, 
