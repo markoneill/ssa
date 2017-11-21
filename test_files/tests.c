@@ -27,13 +27,23 @@ int create_server_socket_new(int port);
 
 int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y);
 
+int counter;
+
 int main(int argc, char* argv[]) {
-	//run_sockops_tests();
-	//run_hostname_tests();
-	run_listen_tests();
-	//run_connect_tests();
-	//run_connect_baseline();
-	//run_connect_benchmark();
+	// Default counter value set. Separate starting value can be set
+	// at beginning of each function if necessary
+	counter = 0;
+	for (int i = 0; i < 1; i++){
+		//run_sockops_tests();
+		//run_hostname_tests();
+		//run_listen_tests();
+		//run_connect_tests();
+		//run_connect_baseline();
+		run_connect_benchmark();
+		//run_listen_baseline();
+		//run_listen_benchmark();
+		counter++;
+	}
 	printf("All tests succeeded!\n");
 	return 0;
 }
@@ -94,6 +104,7 @@ void run_listen_tests(void) {
 }
 
 void run_connect_baseline(void) {
+	counter = 0;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -107,17 +118,19 @@ void run_connect_baseline(void) {
         };
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("[Vanilla] Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("%i [Vanilla] Before connect: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
 	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
 	gettimeofday(&tv, NULL);
-	printf("[Vanilla] After connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("%i [Vanilla] After connect: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	close(sock_fd);
 	return;
 }
 
 void run_connect_benchmark(void) {
+	counter = 3000;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -141,7 +154,78 @@ void run_connect_benchmark(void) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
+
+	gettimeofday(&tv, NULL);
+	printf("After Connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	close(sock_fd);
 	return;
+}
+
+void run_listen_baseline(void){
+	struct sockaddr_storage their_addr;
+	socklen_t addr_size;
+	struct addrinfo hints, *res;
+	int sockfd, new_fd;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	getaddrinfo(NULL, "0", &hints, &res);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockfd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+	bind(sockfd, res->ai_addr, res->ai_addrlen);
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("[Vanilla] Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	listen(sockfd, 10);
+	
+	gettimeofday(&tv, NULL);
+	printf("[Vanilla] After listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	close(sockfd);
+}
+
+void run_listen_benchmark(void){
+	struct sockaddr_storage their_addr;
+        socklen_t addr_size;
+        struct addrinfo hints, *res;
+        int sockfd, new_fd;
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+
+        getaddrinfo(NULL, "0", &hints, &res);
+
+        sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
+        if (sockfd == -1) {
+                perror("socket");
+                exit(EXIT_FAILURE);
+        }
+
+        bind(sockfd, res->ai_addr, res->ai_addrlen);
+
+        struct timeval tv; 
+        gettimeofday(&tv, NULL);
+        printf("Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+        listen(sockfd, 10);
+
+        gettimeofday(&tv, NULL);
+        printf("After listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	close(sockfd);
 }
 
 void handle_client(int sock, struct sockaddr_storage client_addr, socklen_t addr_len) {
