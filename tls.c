@@ -16,6 +16,8 @@
 
 #define MAX_HOST_LEN		255
 
+char default_hostname[] = "Unknown";
+
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
 
@@ -372,10 +374,14 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
 		m_hostname = data->hostname;
 	}
-	else { /* otherwise, we're calling this on a socket the calling process owns */
-		m_hostname = tls_sock_ext_get_data(sk)->hostname;
+	else if ((data = tls_sock_ext_get_data(sk)) != NULL) {
+	       	/* otherwise, we're calling this on a socket the calling process owns */
+		m_hostname = data->hostname;
 	}
-	
+	else {
+		m_hostname = default_hostname;
+	}
+
 	printk(KERN_ALERT "Host Name: %s\t%d\n", m_hostname, (int)strlen(m_hostname));
 	if (m_hostname == NULL){
 		printk(KERN_ALERT "Host name requested was NULL\n");
