@@ -41,8 +41,6 @@ extern int (*ref_inet_listen)(struct socket *sock, int backlog);
 extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
 extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
-tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk);
-
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
 int is_valid_host_string(void *input);
@@ -365,11 +363,7 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 	size_t hostname_len;
 	tls_sock_ext_data_t* data;
 
-	/* If this test succeeds, we're actually calling get_hostname from the TLS wrapper daemon */
-	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
-		m_hostname = data->hostname;
-	}
-	else if ((data = tls_sock_ext_get_data(sk)) != NULL) {
+	if ((data = tls_sock_ext_get_data(sk)) != NULL) {
 	       	/* otherwise, we're calling this on a socket the calling process owns */
 		m_hostname = data->hostname;
 	}

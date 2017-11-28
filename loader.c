@@ -217,8 +217,8 @@ static void __exit tls_exit(void) {
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
 	inet_unregister_protosw(&tls_stream_protosw);
 	
-	tcp_prot.setsockopt = ref_tcp_setsockopt;
-	tcp_prot.getsockopt = ref_tcp_getsockopt;
+	//tcp_prot.setsockopt = ref_tcp_setsockopt;
+	//tcp_prot.getsockopt = ref_tcp_getsockopt;
 
 	/* Set these pointers to NULL to avoid deleting tcp_prot's copied memory */
 	tls_prot.slab = NULL;
