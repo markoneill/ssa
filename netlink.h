@@ -46,6 +46,7 @@ int send_setsockopt_notification(unsigned long id, int optname, void* optval, in
 int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
+int send_close_notification(unsigned long id);
 void unregister_netlink(void);
 
 #endif

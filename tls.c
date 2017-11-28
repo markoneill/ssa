@@ -5,6 +5,7 @@
 
 #include <net/inet_sock.h>
 #include <linux/net.h>
+#include <linux/ctype.h>
 #include <linux/completion.h>
 #include "socktls.h"
 #include "netlink.h"
@@ -15,8 +16,6 @@
 #define REROUTE_PORT		8443
 
 #define MAX_HOST_LEN		255
-
-char default_hostname[] = "Unknown";
 
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
@@ -43,7 +42,7 @@ extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int add
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
-int is_valid_host_string(void *input);
+int is_valid_host_string(char* str, int len);
 
 struct sockaddr_in reroute_addr = {
 	.sin_family = AF_INET,
@@ -242,6 +241,8 @@ void tls_v4_destroy_sock(struct sock* sk) {
 		}
 		kfree(sock_ext_data);
 	}
+	send_close_notification((unsigned long)sk);
+	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	return (*ref_tcp_v4_destroy_sock)(sk);
 }
 
@@ -311,33 +312,29 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
-
+	if (sock_ext_data == NULL) {
+		return -EBADF;
+	}
 	if (sock_ext_data->is_connected == 1) {
 		return -EISCONN;
 	}
-
-	if (optval == NULL){
-		printk(KERN_ALERT "user input is NULL\n");
-		goto einval_out;
+	if (optval == NULL) {
+		return -EINVAL;	
 	}
-
-	if (len > MAX_HOST_LEN){
-		printk(KERN_ALERT "user input hostname too long, cutting to 255\n");
-		len = MAX_HOST_LEN;
+	if (len > MAX_HOST_LEN || len == 0) {
+		return -EINVAL;
 	}	
-
-	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len + 1, GFP_KERNEL);
-
-	if (copy_from_user(sock_ext_data->hostname, optval, len) != 0){
+	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len, GFP_KERNEL);
+	if (sock_ext_data->hostname == NULL) {
+		return -ENOMEM;
+	}
+	if (copy_from_user(sock_ext_data->hostname, optval, len) != 0) {
 		return -EFAULT;
 	}
- 
-	sock_ext_data->hostname[len] = '\0';
-
-	if (!is_valid_host_string(optval)) {
+	if (!is_valid_host_string((char*)optval, len)) {
 		kfree(sock_ext_data->hostname);
-		printk(KERN_ALERT "user input is invalid hostname\n");
-		goto einval_out;
+		sock_ext_data = NULL;
+		return -EINVAL;
 	}
 
 	printk(KERN_ALERT "hostname registered with socket: %s\n", sock_ext_data->hostname);
@@ -353,61 +350,50 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	}
 	return  0;
 
-einval_out:
-	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOPT. HOST NAME HAS NOT BEEN SET\n");
-	return -EINVAL;	
 }
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
-	char *m_hostname;
-	size_t hostname_len;
+	int hostname_len;
 	tls_sock_ext_data_t* data;
-
-	if ((data = tls_sock_ext_get_data(sk)) != NULL) {
-	       	/* otherwise, we're calling this on a socket the calling process owns */
-		m_hostname = data->hostname;
+	char* hostname = NULL;
+	if ((data = tls_sock_ext_get_data(sk)) == NULL) {
+		return -EBADF;
 	}
-	else {
-		m_hostname = default_hostname;
+	hostname = data->hostname;
+	if (hostname == NULL) {
+		return -EFAULT;
 	}
-
-	printk(KERN_ALERT "Host Name: %s\t%d\n", m_hostname, (int)strlen(m_hostname));
-	if (m_hostname == NULL){
-		printk(KERN_ALERT "Host name requested was NULL\n");
-		return EFAULT;
+	hostname_len = strnlen(hostname, MAX_HOST_LEN) + 1;
+	if (*len < hostname_len) {
+		return -EINVAL;	
 	}
-	hostname_len = strnlen(m_hostname, MAX_HOST_LEN) + 1;
-	if ((unsigned int) *len < hostname_len){
-		printk(KERN_ALERT "len smaller than requested hostname\n");
-		return EINVAL;	
-	} 
-	/* Check ownership of pointer and FS thingy */
-	if (copy_to_user(optval, m_hostname, hostname_len) != 0 ){
-		printk(KERN_ALERT "hostname copy to user failed\n");
-		return EFAULT;
+	if (copy_to_user(optval, hostname, hostname_len) != 0 ) {
+		return -EFAULT;
 	}
-	
-	*len = (int)hostname_len - 1;
+	printk(KERN_ALERT "Retrieved hostname: %s\t%d\n", hostname, hostname_len);
+	*len = hostname_len;
 	return 0;
 }
 
 /* 
  * Tests whether a socket option input contains only valid host name characters
- * @param	input - The void *user that was passed to setsockops
- * @return	1 if string is valid. Otherwise 0.
+ * as defined by RFC 952 and RFC 1123.
+ * @param	str - A pointer to a string to be checked
+ * @param	len - The length of str, including null terminator 
+ * @return	1 if string is valid and 0 otherwise
  */
-int is_valid_host_string(void *input) {
-        int str_len;
-	unsigned int i;
-        str_len = strnlen((char *)input, 255);
-        for (i = 0; i < str_len; i++){
-                int c = (int)(*((char*)input));
-                if ( (c >= 48 && c <=57) || c == 45 || c == 46 || (c >= 65 && c <= 90) || (c >= 97 && c <= 122)){
-			input++;
-                        continue;
+int is_valid_host_string(char* str, int len) {
+	int i;
+	char c;
+	for (i = 0; i < len-1; i++) {
+		c = str[i];
+                if (!isalnum(c) && c != '-' && c != '.') {
+			return 0;
                 }
-		return 0;
         }
+	if (str[len] != '\0') {
+		return 0;
+	}
         return 1;
 }
 

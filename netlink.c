@@ -314,3 +314,33 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	}
 	return 0;
 }
+
+int send_close_notification(unsigned long id) {
+	struct sk_buff* skb;
+	int ret;
+	void* msg_head;
+
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	if (skb == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_new [close notify]\n");
+		return -1;
+	}
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_CLOSE_NOTIFY);
+	if (msg_head == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_put [close notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (id) [close notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	genlmsg_end(skb, msg_head);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [close notify]\n");
+	}
+	return 0;
+}
