@@ -237,12 +237,13 @@ void tls_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data == NULL) {
 		return;
 	}
-	hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
+	send_close_notification((unsigned long)sk);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
 	}
-	//send_close_notification((unsigned long)sk);
-	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
+	spin_lock(&tls_sock_ext_lock);
+	hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
+	spin_unlock(&tls_sock_ext_lock);
 	kfree(sock_ext_data);
 	(*ref_tcp_v4_destroy_sock)(sk);
 	return;

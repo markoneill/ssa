@@ -33,13 +33,13 @@ int main(int argc, char* argv[]) {
 	// Default counter value set. Separate starting value can be set
 	// at beginning of each function if necessary
 	counter = 0;
-	for (int i = 0; i < 100; i++) {
-		//run_sockops_tests();
+	for (int i = 0; i < 1; i++) {
+		run_sockops_tests();
 		//run_hostname_tests();
 		//run_listen_tests();
 		//run_connect_tests();
 		//run_connect_baseline();
-		run_connect_benchmark();
+		//run_connect_benchmark();
 		//run_listen_baseline();
 		//run_listen_benchmark();
 		counter++;

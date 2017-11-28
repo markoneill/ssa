@@ -55,6 +55,13 @@ static struct genl_ops ssa_nl_ops[] = {
                 .dumpit = NULL,
         },
         {
+                .cmd = SSA_NL_C_CLOSE_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
+        {
                 .cmd = SSA_NL_C_RETURN,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
