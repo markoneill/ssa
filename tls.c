@@ -21,9 +21,6 @@ char default_hostname[] = "Unknown";
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
 
-static DEFINE_HASHTABLE(dst_map, HASH_TABLE_BITSIZE);
-static DEFINE_SPINLOCK(dst_map_lock);
-
 /* Original TCP reference functions */
 extern int (*ref_tcp_v4_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 extern int (*ref_tcp_v6_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
@@ -49,7 +46,6 @@ tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk);
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
 int is_valid_host_string(void *input);
-int get_orig_dst(struct sock *sk, void __user *optval, int __user *len);
 
 struct sockaddr_in reroute_addr = {
 	.sin_family = AF_INET,
@@ -117,7 +113,6 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	/* We can use the port number now because inet_bind will have set
 	 * it for us */
 	int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
-	sock_ext_data->remote_key = int_addr.sin_port;
 
 	/* We only want to continue if the internal socket bind succeeds */
 	if (ret != 0) {
@@ -142,6 +137,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
+	int ret;
         struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
                 .sin_port = 0,
@@ -162,18 +158,11 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		//kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		lock_sock(sk);
 		int_addr.sin_port = inet_sk(sk)->inet_sport;
-		sock_ext_data->remote_key = int_addr.sin_port;
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
 		sock_ext_data->has_bound = 1;
 	}
 
-	/* Use bound source port as the key for rem_addr hash lookup */
-	spin_lock(&dst_map_lock);
-	hash_add(dst_map, &sock_ext_data->remote_hash, sock_ext_data->remote_key);
-	spin_unlock(&dst_map_lock);
-
-	
 	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
@@ -182,7 +171,12 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	if (sock_ext_data->response != 0) {
 		return sock_ext_data->response;
 	}
-	return (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
+	ret = (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
+	if (ret != 0) {
+		return ret;
+	}
+	sock_ext_data->is_connected = 1;
+	return 0;
 }
 
 /* Overriden TLS connect for v6 function */
@@ -244,7 +238,6 @@ int tls_v4_init_sock(struct sock *sk) {
 void tls_v4_destroy_sock(struct sock* sk) {
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
 	if (sock_ext_data != NULL) {
-		hash_del(&sock_ext_data->remote_hash); /* remove from dst_map */
 		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
 		if (sock_ext_data->hostname) {
 			kfree(sock_ext_data->hostname);
@@ -272,7 +265,6 @@ tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk) {
 void tls_setup() {
 	register_netlink();
 	hash_init(tls_sock_ext_data_table);
-	hash_init(dst_map);
 	return;
 }
 
@@ -282,17 +274,10 @@ void tls_cleanup() {
         struct hlist_node tmp;
         struct hlist_node* tmpptr = &tmp;
 
-	spin_lock(&dst_map_lock);
-	hash_for_each_safe(dst_map, bkt, tmpptr, it, remote_hash) {
-		hash_del(&it->remote_hash);
-	}
-	spin_unlock(&dst_map_lock);
-
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
 		//(*ref_tcp_close)(it->sk, 0);
 		(*ref_tcp_v4_destroy_sock)(it->sk);
-		hash_del(&it->remote_hash);
                 hash_del(&it->hash);
                 kfree(it->hostname);
 		kfree(it);
@@ -308,8 +293,6 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	switch (optname) {
 		case SO_HOSTNAME:
 			return set_hostname(sk, optval, len);
-		case SO_ORIG_DST:
-			return 0; /* Unimplemented */
 		default:
 			return ref_tcp_setsockopt(sk, level, optname, optval, len);
 	}
@@ -320,8 +303,6 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	switch (optname) {
 		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
-		case SO_ORIG_DST:
-			return get_orig_dst(sk, optval, optlen);
 		default:
 			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
 	}
@@ -332,6 +313,10 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
+
+	if (sock_ext_data->is_connected == 1) {
+		return -EISCONN;
+	}
 
 	if (optval == NULL){
 		printk(KERN_ALERT "user input is NULL\n");
@@ -346,7 +331,7 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len + 1, GFP_KERNEL);
 
 	if (copy_from_user(sock_ext_data->hostname, optval, len) != 0){
-		return EFAULT;
+		return -EFAULT;
 	}
  
 	sock_ext_data->hostname[len] = '\0';
@@ -358,11 +343,21 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	}
 
 	printk(KERN_ALERT "hostname registered with socket: %s\n", sock_ext_data->hostname);
+
+	/* XXX the following will probably be generalizable when we add more opts */
+	send_setsockopt_notification((unsigned long)sk, SO_HOSTNAME, sock_ext_data->hostname, len);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -ENOBUFS;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
 	return  0;
 
 einval_out:
 	printk(KERN_ERR "ABORTING SET HOST NAME SOCKOPT. HOST NAME HAS NOT BEEN SET\n");
-	return EINVAL;	
+	return -EINVAL;	
 }
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
@@ -420,30 +415,6 @@ int is_valid_host_string(void *input) {
 		return 0;
         }
         return 1;
-}
-
-tls_sock_ext_data_t* get_tls_sock_data_using_local_endpoint(struct sock *sk) {
-	unsigned long key;
-	tls_sock_ext_data_t* it;
-	key = inet_sk(sk)->inet_dport; /* we use dport because dport of tls daemon's client fd is sport of the app's fd */
-	hash_for_each_possible(dst_map, it, remote_hash, key) {
-		if (key == it->remote_key) {
-			return it;
-		}
-	}
-        return NULL;
-}
-
-int get_orig_dst(struct sock *sk, void __user *optval, int __user *len) {
-	unsigned long copied;
-	tls_sock_ext_data_t* data;
-	if ((data = get_tls_sock_data_using_local_endpoint(sk)) != NULL) {
-		*len = data->rem_addrlen;
-		copied = copy_to_user(optval, &data->rem_addr, data->rem_addrlen);
-		if (copied != data->rem_addrlen) return 1;
-		else return 0;
-	}
-        return 0;
 }
 
 void report_return(unsigned long key, int ret) {

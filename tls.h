@@ -8,8 +8,6 @@
 typedef struct tls_sock_ext_data {
         unsigned long key;
         struct hlist_node hash;
-	unsigned long remote_key; /* for orig dest lookup */
-	struct hlist_node remote_hash; /* for orig dest lookup */
 	struct sockaddr ext_addr;
 	int ext_addrlen;
 	struct sockaddr int_addr;
@@ -19,6 +17,7 @@ typedef struct tls_sock_ext_data {
 	int has_bound; /* zero if no bind explicitly called  by app */
         pid_t pid;
         char *hostname;
+	int is_connected;
         struct sock* sk;
 	struct completion sock_event;
 	int response;
