@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
 	// Default counter value set. Separate starting value can be set
 	// at beginning of each function if necessary
 	counter = 0;
-	for (int i = 0; i < 100; i++){
+	for (int i = 0; i < 100; i++) {
 		//run_sockops_tests();
 		//run_hostname_tests();
 		//run_listen_tests();
@@ -68,8 +68,8 @@ void run_sockops_tests(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (hostname_length != strlen(hostname)) {
-		fprintf(stderr, "Hostname is length %d but retrieved length is %d!\n", strlen(hostname), hostname_length);
+	if (hostname_length != sizeof(hostname)) {
+		fprintf(stderr, "Hostname is length %d but retrieved length is %d!\n", sizeof(hostname), hostname_length);
 		exit(EXIT_FAILURE);
 	}
 
@@ -86,6 +86,7 @@ void run_sockops_tests(void) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
+	close(sock_fd);
 	return;
 }
 

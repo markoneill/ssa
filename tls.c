@@ -234,16 +234,18 @@ int tls_v4_init_sock(struct sock *sk) {
 
 void tls_v4_destroy_sock(struct sock* sk) {
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	if (sock_ext_data != NULL) {
-		hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
-		if (sock_ext_data->hostname) {
-			kfree(sock_ext_data->hostname);
-		}
-		kfree(sock_ext_data);
+	if (sock_ext_data == NULL) {
+		return;
 	}
-	send_close_notification((unsigned long)sk);
-	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
-	return (*ref_tcp_v4_destroy_sock)(sk);
+	hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
+	if (sock_ext_data->hostname != NULL) {
+		kfree(sock_ext_data->hostname);
+	}
+	//send_close_notification((unsigned long)sk);
+	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
+	kfree(sock_ext_data);
+	(*ref_tcp_v4_destroy_sock)(sk);
+	return;
 }
 
 /**
@@ -313,6 +315,7 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
 	if (sock_ext_data == NULL) {
+		printk(KERN_ALERT "ebadf\n");
 		return -EBADF;
 	}
 	if (sock_ext_data->is_connected == 1) {
@@ -333,7 +336,7 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	}
 	if (!is_valid_host_string((char*)optval, len)) {
 		kfree(sock_ext_data->hostname);
-		sock_ext_data = NULL;
+		sock_ext_data->hostname = NULL;
 		return -EINVAL;
 	}
 
@@ -391,7 +394,7 @@ int is_valid_host_string(char* str, int len) {
 			return 0;
                 }
         }
-	if (str[len] != '\0') {
+	if (str[len-1] != '\0') {
 		return 0;
 	}
         return 1;
