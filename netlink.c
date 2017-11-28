@@ -13,12 +13,21 @@ static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_SOCKADDR_REMOTE] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_OPTNAME] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_OPTVAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_RETURN] = { .type = NLA_UNSPEC },
 };
 
 static struct genl_ops ssa_nl_ops[] = {
         {
                 .cmd = SSA_NL_C_SOCKET_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
+        {
+                .cmd = SSA_NL_C_SETSOCKOPT_NOTIFY,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
                 .doit = nl_fail,
