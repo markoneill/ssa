@@ -341,7 +341,7 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	}
 
 	/* XXX the following will probably be generalizable when we add more opts */
-	send_setsockopt_notification((unsigned long)sk, SO_HOSTNAME, sock_ext_data->hostname, len);
+	send_setsockopt_notification((unsigned long)sk, SOL_TCP, SO_HOSTNAME, sock_ext_data->hostname, len);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -ENOBUFS;

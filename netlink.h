@@ -10,6 +10,7 @@ enum {
 	SSA_NL_A_SOCKADDR_INTERNAL,
 	SSA_NL_A_SOCKADDR_EXTERNAL,
 	SSA_NL_A_SOCKADDR_REMOTE,
+	SSA_NL_A_OPTLEVEL,
 	SSA_NL_A_OPTNAME,
 	SSA_NL_A_OPTVAL,
 	SSA_NL_A_RETURN,
@@ -42,7 +43,7 @@ enum ssa_nl_groups {
 
 int register_netlink(void);
 int send_socket_notification(unsigned long id);
-int send_setsockopt_notification(unsigned long id, int optname, void* optval, int optlen);
+int send_setsockopt_notification(unsigned long id, int level, int optname, void* optval, int optlen);
 int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);

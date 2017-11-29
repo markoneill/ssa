@@ -13,6 +13,7 @@ static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_SOCKADDR_REMOTE] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_OPTLEVEL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_OPTNAME] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_OPTVAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_RETURN] = { .type = NLA_UNSPEC },
@@ -151,7 +152,7 @@ int send_socket_notification(unsigned long id) {
 	return 0;
 }
 
-int send_setsockopt_notification(unsigned long id, int optname, void* optval, int optlen) {
+int send_setsockopt_notification(unsigned long id, int level, int optname, void* optval, int optlen) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
@@ -170,6 +171,12 @@ int send_setsockopt_notification(unsigned long id, int optname, void* optval, in
 	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in nla_put (id) [setsockopt notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_OPTLEVEL, sizeof(int), &level);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (level) [setsockopt notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}
