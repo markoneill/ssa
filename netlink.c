@@ -95,7 +95,6 @@ int daemon_cb(struct sk_buff* skb, struct genl_info* info) {
 	struct nlattr* na;
 	unsigned long key;
 	int response;
-        printk(KERN_ALERT "Kernel receieved a response from the daemon\n");
 	if (info == NULL) {
 		printk(KERN_ALERT "Netlink: Message info is null\n");
 		return -1;
@@ -126,7 +125,6 @@ int send_socket_notification(unsigned long id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
-	printk(KERN_ALERT "[socket] id is %lu\n", id);
 
 	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 	if (skb == NULL) {
@@ -241,7 +239,6 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
-	printk(KERN_ALERT "[connect] id is %lu\n", id);
 
 	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 	if (skb == NULL) {

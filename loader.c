@@ -140,7 +140,7 @@ int set_tls_prot(void) {
 	//tcp_prot.getsockopt = tls_getsockopt;
 
 
-	printk(KERN_ALERT "TLS protocol set");
+	printk(KERN_INFO "TLS protocol initialized\n");
 	return 0;
 }
 
@@ -149,7 +149,7 @@ static int __init tls_init(void) {
 	static const struct net_protocol *ipprot_lookup;
 	unsigned long kallsyms_err;
 
-	printk(KERN_ALERT "Initializing TLS module\n");
+	printk(KERN_INFO "Initializing TLS module\n");
 	
 	/* initialize our global data structures for TLS handling */
 	tls_setup();
@@ -166,7 +166,7 @@ static int __init tls_init(void) {
 		printk(KERN_INFO "Protocol registration was successful\n");
 	}
 	else {
-		printk(KERN_INFO "Protocol registration failed\n");
+		printk(KERN_ALERT "Protocol registration failed\n");
 		goto out;
 	}
 
@@ -193,7 +193,7 @@ static int __init tls_init(void) {
 		printk(KERN_INFO "Protocol insertion in inet_protos[] was successful\n");
 	}
 	else {
-		printk(KERN_INFO "Protocol insertion in inet_protos[] failed\n");
+		printk(KERN_ALERT "Protocol insertion in inet_protos[] failed\n");
 		goto out_proto_unregister;
 	}
 
@@ -229,7 +229,6 @@ static void __exit tls_exit(void) {
 	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
 	/* Free TLS socket handling data */
 	tls_cleanup();
-	printk(KERN_ALERT "memallocated: %ld\n", proto_memory_allocated(&tls_prot));
 }
 
 module_init(tls_init);

@@ -316,7 +316,6 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
 	if (sock_ext_data == NULL) {
-		printk(KERN_ALERT "ebadf\n");
 		return -EBADF;
 	}
 	if (sock_ext_data->is_connected == 1) {
@@ -340,8 +339,6 @@ int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
 		sock_ext_data->hostname = NULL;
 		return -EINVAL;
 	}
-
-	printk(KERN_ALERT "hostname registered with socket: %s\n", sock_ext_data->hostname);
 
 	/* XXX the following will probably be generalizable when we add more opts */
 	send_setsockopt_notification((unsigned long)sk, SO_HOSTNAME, sock_ext_data->hostname, len);
@@ -374,7 +371,6 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 	if (copy_to_user(optval, hostname, hostname_len) != 0 ) {
 		return -EFAULT;
 	}
-	printk(KERN_ALERT "Retrieved hostname: %s\t%d\n", hostname, hostname_len);
 	*len = hostname_len;
 	return 0;
 }
