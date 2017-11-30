@@ -35,12 +35,12 @@ int main(int argc, char* argv[]) {
 	// at beginning of each function if necessary
 	counter = 0;
 	for (int i = 0; i < 100; i++) {
-		run_sockops_tests();
+		//run_sockops_tests();
 		//run_hostname_tests();
 		//run_listen_tests();
 		//run_connect_tests();
 		//run_connect_baseline();
-		//run_connect_benchmark();
+		run_connect_benchmark();
 		//run_listen_baseline();
 		//run_listen_benchmark();
 		counter++;
