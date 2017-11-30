@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <errno.h>
 #include <netdb.h>
@@ -34,12 +35,12 @@ int main(int argc, char* argv[]) {
 	// at beginning of each function if necessary
 	counter = 0;
 	for (int i = 0; i < 100; i++) {
-		//run_sockops_tests();
+		run_sockops_tests();
 		//run_hostname_tests();
 		//run_listen_tests();
-		run_connect_tests();
+		//run_connect_tests();
 		//run_connect_baseline();
-		run_connect_benchmark();
+		//run_connect_benchmark();
 		//run_listen_baseline();
 		//run_listen_benchmark();
 		counter++;
@@ -49,6 +50,7 @@ int main(int argc, char* argv[]) {
 }
 
 void run_sockops_tests(void) {
+	int flag = 1;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -58,6 +60,11 @@ void run_sockops_tests(void) {
 	const char hostname[] = "www.google.com";
         if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
 		perror("setsockopt: SO_HOSTNAME");
+		exit(EXIT_FAILURE);
+	}
+
+        if (setsockopt(sock_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) == -1) {
+		perror("setsockopt: TCP_NODELAY");
 		exit(EXIT_FAILURE);
 	}
 

@@ -129,17 +129,12 @@ int set_tls_prot(void) {
 	tls_proto_ops.bind = tls_inet_bind;
 	tls_proto_ops.accept = tls_inet_accept;
 	tls_proto_ops.owner = THIS_MODULE;
-	/* We're saving and overriding the tcp_prot set/getsockopt
-	 * so that we can define a "set/get original destination"
-	 * option for stream socket types */
-	//ref_tcp_setsockopt = tcp_prot.setsockopt;
-	//ref_tcp_getsockopt = tcp_prot.getsockopt;
+
+	ref_tcp_setsockopt = tcp_prot.setsockopt;
+	ref_tcp_getsockopt = tcp_prot.getsockopt;
+
 	tls_prot.setsockopt = tls_setsockopt;
 	tls_prot.getsockopt = tls_getsockopt;
-	//tcp_prot.setsockopt = tls_setsockopt;
-	//tcp_prot.getsockopt = tls_getsockopt;
-
-
 	printk(KERN_INFO "TLS protocol initialized\n");
 	return 0;
 }

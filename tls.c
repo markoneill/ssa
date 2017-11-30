@@ -41,7 +41,7 @@ extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int f
 extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
-int set_hostname(struct sock* sk, char __user *optval, unsigned int len);
+int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int len);
 int is_valid_host_string(char* str, int len);
 
 struct sockaddr_in reroute_addr = {
@@ -292,11 +292,68 @@ void tls_cleanup() {
 }
 
 int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
+	int ret;
+	char* koptval;
+	tls_sock_ext_data_t* sock_ext_data;
+	sock_ext_data = tls_sock_ext_get_data(sk);
+
+	if (sock_ext_data == NULL) {
+		return -EBADF;
+	}
+	if (optval == NULL) {
+		return -EINVAL;	
+	}
+	if (len == 0) {
+		return -EINVAL;
+	}
+	koptval = kmalloc(len, GFP_KERNEL);
+	if (koptval == NULL) {
+		return -ENOMEM;
+	}
+	if (copy_from_user(koptval, optval, len) != 0) {
+		kfree(koptval);
+		return -EFAULT;
+	}
+
+	/* Here we save all TLS-specific sockopt values so that
+	 * we can retrieve them directly from the kernel when
+	 * the application uses getsockopt */
 	switch (optname) {
 		case SO_HOSTNAME:
-			return set_hostname(sk, optval, len);
+			ret = set_hostname(sock_ext_data, koptval, len);
+			break;
 		default:
+			ret = 0;
+			break;
+	}
+
+	/* We return early if preliminary checks during our
+	 * kernel-side saving of sockopts failed. No sense
+	 * in telling the daemon about it. */
+	if (ret != 0) {
+		kfree(koptval);
+		return ret;
+	}
+
+	send_setsockopt_notification((unsigned long)sk, level, optname, koptval, len);
+	kfree(koptval);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -ENOBUFS;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
+
+	/* We only get here if the daemonside setsockopt succeeded */
+
+	switch (optname) {
+		case SO_HOSTNAME:
+			break;
+		default:
+			/* Now we do the same thing to the application socket, if applicable */
 			return ref_tcp_setsockopt(sk, level, optname, optval, len);
+			break;
 	}
 	return 0;
 }
@@ -312,45 +369,22 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 }
 
 
-int set_hostname(struct sock* sk, char __user *optval, unsigned int len) {
-	tls_sock_ext_data_t* sock_ext_data;
-	sock_ext_data = tls_sock_ext_get_data(sk);
-	if (sock_ext_data == NULL) {
-		return -EBADF;
-	}
+int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int len) {
 	if (sock_ext_data->is_connected == 1) {
 		return -EISCONN;
 	}
-	if (optval == NULL) {
-		return -EINVAL;	
-	}
-	if (len > MAX_HOST_LEN || len == 0) {
+	if (len > MAX_HOST_LEN) {
 		return -EINVAL;
-	}	
+	}
 	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len, GFP_KERNEL);
 	if (sock_ext_data->hostname == NULL) {
 		return -ENOMEM;
 	}
-	if (copy_from_user(sock_ext_data->hostname, optval, len) != 0) {
-		return -EFAULT;
-	}
-	if (!is_valid_host_string((char*)optval, len)) {
-		kfree(sock_ext_data->hostname);
-		sock_ext_data->hostname = NULL;
+	if (!is_valid_host_string(optval, len)) {
 		return -EINVAL;
 	}
-
-	/* XXX the following will probably be generalizable when we add more opts */
-	send_setsockopt_notification((unsigned long)sk, SOL_TCP, SO_HOSTNAME, sock_ext_data->hostname, len);
-	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
-		/* Let's lie to the application if the daemon isn't responding */
-		return -ENOBUFS;
-	}
-	if (sock_ext_data->response != 0) {
-		return sock_ext_data->response;
-	}
+	memcpy(sock_ext_data->hostname, optval, len);
 	return  0;
-
 }
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
