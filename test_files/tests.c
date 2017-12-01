@@ -17,14 +17,20 @@ void run_connect_tests(void);
 void run_listen_tests(void);
 void run_hostname_tests(void);
 
-void run_connect_benchmark(void);
-void run_connect_baseline(void);
-
 void handle_client(int sock, struct sockaddr_storage client_addr, socklen_t addr_len);
 int connect_to_host(char* host, char* service);
 int connect_to_host_new(char* host, char* service);
 int create_server_socket(char* port, int protocol);
 int create_server_socket_new(int port);
+
+void run_socket_baseline(void);
+void run_socket_benchmark(void);
+void run_connect_baseline(void);
+void run_connect_benchmark(void);
+void run_listen_baseline(void);
+void run_listen_benchmark(void);
+void run_bind_baseline(void);
+void run_bind_benchmark(void);
 
 int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y);
 
@@ -40,14 +46,17 @@ int main(int argc, char* argv[]) {
 		//run_listen_tests();
 		//run_connect_tests();
 		//run_connect_baseline();
-		run_connect_benchmark();
+		//run_connect_benchmark();
 		//run_listen_baseline();
 		//run_listen_benchmark();
+		//run_bind_baseline();
+		run_bind_benchmark();
 		counter++;
 	}
 	printf("All tests succeeded!\n");
 	return 0;
 }
+
 
 void run_sockops_tests(void) {
 	int flag = 1;
@@ -111,6 +120,32 @@ void run_listen_tests(void) {
 	return;
 }
 
+void run_socket_baseline(void) {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("%i [Vanilla] Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	gettimeofday(&tv, NULL);
+	printf("%i [Vanilla] After socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+
+	close(sock_fd);
+}
+
+void run_socket_benchmark(void) {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("%i Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	gettimeofday(&tv, NULL);
+	printf("%i After socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+
+	close(sock_fd);
+}
+
 void run_connect_baseline(void) {
 	counter = 0;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -170,6 +205,72 @@ void run_connect_benchmark(void) {
 	return;
 }
 
+void run_bind_baseline(void){
+	struct sockaddr_storage their_addr;
+	socklen_t addr_size;
+	struct addrinfo hints, *res;
+	int sockfd, new_fd;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	getaddrinfo(NULL, "0", &hints, &res);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockfd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("[vanilla] Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
+		perror("Bind Failure:");
+		exit(0);
+	}
+
+	gettimeofday(&tv, NULL);
+	printf("[Vanilla] After bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+}
+
+void run_bind_benchmark(void){
+	struct sockaddr_storage their_addr;
+	socklen_t addr_size;
+	struct addrinfo hints, *res;
+	int sockfd, new_fd;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	getaddrinfo(NULL, "0", &hints, &res);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
+	if (sockfd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	printf("Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+	if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
+		perror("Bind Failure");
+	}
+
+	gettimeofday(&tv, NULL);
+	printf("After bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+
+
+}
+
 void run_listen_baseline(void){
 	struct sockaddr_storage their_addr;
 	socklen_t addr_size;
@@ -193,7 +294,7 @@ void run_listen_baseline(void){
 
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("[Vanilla] Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[vanilla] Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 
 	listen(sockfd, 10);
 	
