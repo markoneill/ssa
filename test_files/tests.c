@@ -323,7 +323,7 @@ void run_listen_benchmark(void){
                 exit(EXIT_FAILURE);
         }
 
-        bind(sockfd, res->ai_addr, res->ai_addrlen);
+       bind(sockfd, res->ai_addr, res->ai_addrlen);
 
         struct timeval tv; 
         gettimeofday(&tv, NULL);

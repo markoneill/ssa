@@ -147,7 +147,7 @@ int send_socket_notification(unsigned long id) {
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [socket notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [socket notify] (%d)\n", ret);
 	}
 	return 0;
 }
@@ -195,7 +195,7 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify] (%d)\n", ret);
 	}
 	return 0;
 }
@@ -237,7 +237,7 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [bind notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [bind notify] (%d)\n", ret);
 	}
 	return 0;
 }
@@ -279,7 +279,7 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [connect notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [connect notify]\n (%d)", ret);
 	}
 	return 0;
 }
@@ -321,7 +321,7 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [listen notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [listen notify] (%d)\n", ret);
 	}
 	return 0;
 }
@@ -351,7 +351,8 @@ int send_close_notification(unsigned long id) {
 	genlmsg_end(skb, msg_head);
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [close notify]\n");
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [close notify] (%d)\n", ret);
+		
 	}
 	return 0;
 }
