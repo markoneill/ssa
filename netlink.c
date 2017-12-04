@@ -127,7 +127,7 @@ int send_socket_notification(unsigned long id) {
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(32, GFP_ATOMIC);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [socket notify]\n");
 		return -1;
@@ -205,7 +205,7 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(64, GFP_ATOMIC);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [bind notify]\n");
 		return -1;

@@ -94,22 +94,21 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	int ret;
-        struct sockaddr_in int_addr = {
-                .sin_family = AF_INET,
-                .sin_port = 0,
-                .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
-        };
 
 	/* We disregard the address the application wants to bind to in favor
 	 * of one assigned by the system (using sin_port = 0 on localhost),
 	 * so that we can have the TLS wrapper daemon bind to the actual one */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
-	BUG_ON(sock_ext_data == NULL);
-	ret = (*ref_inet_bind)(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+	//BUG_ON(sock_ext_data == NULL);
+	/*printk(KERN_ALERT "uhhhm %u %u %u\n", 
+			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_port,
+			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_family,
+			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_addr.s_addr);*/
+	ret = (*ref_inet_bind)(sock, &sock_ext_data->int_addr, addr_len);
 
 	/* We can use the port number now because inet_bind will have set
 	 * it for us */
-	int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
+	((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_port = inet_sk(sock->sk)->inet_sport;
 
 	/* We only want to continue if the internal socket bind succeeds */
 	if (ret != 0) {
@@ -117,7 +116,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 		return ret;
 	}
 
-	send_bind_notification((unsigned long)sock->sk, (struct sockaddr*)&int_addr, (struct sockaddr*)uaddr);
+	send_bind_notification((unsigned long)sock->sk, &sock_ext_data->int_addr, (struct sockaddr*)uaddr);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EADDRINUSE;
@@ -126,8 +125,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 		return sock_ext_data->response;
 	}
 	sock_ext_data->has_bound = 1;
-	memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
-	sock_ext_data->int_addrlen = sizeof(int_addr);
+	sock_ext_data->int_addrlen = addr_len;
 	sock_ext_data->ext_addr = *uaddr;
 	sock_ext_data->ext_addrlen = addr_len;
 	return 0;
@@ -136,11 +134,11 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	int ret;
-        struct sockaddr_in int_addr = {
-                .sin_family = AF_INET,
-                .sin_port = 0,
-                .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
-        };
+	struct sockaddr_in int_addr = {
+		.sin_family = AF_INET,
+		.sin_port = 0,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+	};
 
 	/* Save original destination address information */
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
@@ -226,11 +224,17 @@ void tls_shutdown(struct sock *sk, int how){
 int tls_v4_init_sock(struct sock *sk) {
 	int ret;
 	tls_sock_ext_data_t* sock_ext_data;
-	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t), GFP_KERNEL)) == NULL) {
+	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t),GFP_ATOMIC)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock\n");
 		return -1;
 	}
+
 	memset(sock_ext_data, 0, sizeof(tls_sock_ext_data_t));
+
+	((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_family = AF_INET;
+	((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_port = 0;
+	((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
@@ -308,7 +312,7 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	if (len == 0) {
 		return -EINVAL;
 	}
-	koptval = kmalloc(len, GFP_KERNEL);
+	koptval = kmalloc(len, GFP_ATOMIC);
 	if (koptval == NULL) {
 		return -ENOMEM;
 	}
@@ -378,7 +382,7 @@ int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int 
 	if (len > MAX_HOST_LEN) {
 		return -EINVAL;
 	}
-	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len, GFP_KERNEL);
+	sock_ext_data->hostname = krealloc(sock_ext_data->hostname, len, GFP_ATOMIC);
 	if (sock_ext_data->hostname == NULL) {
 		return -ENOMEM;
 	}

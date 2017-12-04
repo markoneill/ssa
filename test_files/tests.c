@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
 		//run_listen_baseline();
 		//run_listen_benchmark();
 		//run_bind_baseline();
-		//run_bind_benchmark();
+		run_bind_benchmark();
 		counter++;
 	}
 	printf("All tests succeeded!\n");
