@@ -45,6 +45,8 @@ int main(int argc, char* argv[]) {
 		//run_hostname_tests();
 		//run_listen_tests();
 		//run_connect_tests();
+		//run_socket_baseline();
+		//run_socket_benchmark();
 		//run_connect_baseline();
 		//run_connect_benchmark();
 		//run_listen_baseline();
@@ -122,31 +124,35 @@ void run_listen_tests(void) {
 
 void run_socket_baseline(void) {
 	struct timeval tv;
+	struct timeval tv_after;
 	gettimeofday(&tv, NULL);
-	printf("%i [Vanilla] Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
 
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	gettimeofday(&tv, NULL);
-	printf("%i [Vanilla] After socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("%i [Vanilla] Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	printf("%i [Vanilla] After socket: %ld.%06ld\n", counter, tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sock_fd);
 }
 
 void run_socket_benchmark(void) {
 	struct timeval tv;
+	struct timeval tv_after;
 	gettimeofday(&tv, NULL);
-	printf("%i Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
 
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	gettimeofday(&tv, NULL);
-	printf("%i After socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("%i Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	printf("%i After socket: %ld.%06ld\n", counter, tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sock_fd);
 }
 
 void run_connect_baseline(void) {
+	struct timeval tv;
+	struct timeval tv_after;
 	counter = 0;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock_fd == -1) {
@@ -159,20 +165,21 @@ void run_connect_baseline(void) {
                 .sin_port = htons(8888),
                 .sin_addr.s_addr = htonl(INADDR_LOOPBACK), // 127.0.0.1
         };
-	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("%i [Vanilla] Before connect: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
 	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
-	gettimeofday(&tv, NULL);
-	printf("%i [Vanilla] After connect: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("%i [Vanilla] Before connect: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
+	printf("%i [Vanilla] After connect: %ld.%06ld\n", counter, tv_after.tv_sec, tv_after.tv_usec);
 	close(sock_fd);
 	return;
 }
 
 void run_connect_benchmark(void) {
+	struct timeval tv;
+	struct timeval tv_after;
 	counter = 3000;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
@@ -190,22 +197,23 @@ void run_connect_benchmark(void) {
                 .sin_port = htons(8888),
                 .sin_addr.s_addr = htonl(INADDR_LOOPBACK), // 127.0.0.1
         };
-	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
 
-	gettimeofday(&tv, NULL);
-	printf("After Connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("After Connect: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sock_fd);
 	return;
 }
 
 void run_bind_baseline(void){
+	struct timeval tv;
+	struct timeval tv_after;
 	struct sockaddr_storage their_addr;
 	socklen_t addr_size;
 	struct addrinfo hints, *res;
@@ -224,25 +232,26 @@ void run_bind_baseline(void){
 		exit(EXIT_FAILURE);
 	}
 
-	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("[vanilla] Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 
 	if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
 		perror("Bind Failure:");
 		exit(0);
 	}
 
-	gettimeofday(&tv, NULL);
-	printf("[Vanilla] After bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("[vanilla] Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[Vanilla] After bind: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 }
 
 void run_bind_benchmark(void){
+	struct timeval tv;
+	struct timeval tv_after;
 	struct sockaddr_storage their_addr;
-	socklen_t addr_size;
 	struct addrinfo hints, *res;
 	int sockfd, new_fd;
+	socklen_t addr_size;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;
@@ -257,21 +266,22 @@ void run_bind_benchmark(void){
 		exit(EXIT_FAILURE);
 	}
 
-	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 
 	if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1) {
 		perror("Bind Failure");
 	}
 
-	gettimeofday(&tv, NULL);
-	printf("After bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("Before bind: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("After bind: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 
 }
 
 void run_listen_baseline(void){
+	struct timeval tv;
+	struct timeval tv_after;
 	struct sockaddr_storage their_addr;
 	socklen_t addr_size;
 	struct addrinfo hints, *res;
@@ -292,19 +302,20 @@ void run_listen_baseline(void){
 
 	bind(sockfd, res->ai_addr, res->ai_addrlen);
 
-	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	printf("[vanilla] Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 
 	listen(sockfd, 10);
 	
-	gettimeofday(&tv, NULL);
-	printf("[Vanilla] After listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	gettimeofday(&tv_after, NULL);
+	printf("[vanilla] Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[Vanilla] After listen: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sockfd);
 }
 
 void run_listen_benchmark(void){
+        struct timeval tv; 
+	struct timeval tv_after;
 	struct sockaddr_storage their_addr;
         socklen_t addr_size;
         struct addrinfo hints, *res;
@@ -325,14 +336,13 @@ void run_listen_benchmark(void){
 
        bind(sockfd, res->ai_addr, res->ai_addrlen);
 
-        struct timeval tv; 
         gettimeofday(&tv, NULL);
-        printf("Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
 
         listen(sockfd, 10);
 
-        gettimeofday(&tv, NULL);
-        printf("After listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+        gettimeofday(&tv_after, NULL);
+        printf("Before listen: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+        printf("After listen: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sockfd);
 }
