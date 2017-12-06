@@ -94,16 +94,12 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 
 int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	int ret;
-
+	tls_sock_ext_data_t* sock_ext_data;
 	/* We disregard the address the application wants to bind to in favor
 	 * of one assigned by the system (using sin_port = 0 on localhost),
 	 * so that we can have the TLS wrapper daemon bind to the actual one */
-	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
-	//BUG_ON(sock_ext_data == NULL);
-	/*printk(KERN_ALERT "uhhhm %u %u %u\n", 
-			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_port,
-			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_family,
-			((struct sockaddr_in*)&sock_ext_data->int_addr)->sin_addr.s_addr);*/
+
+	sock_ext_data = tls_sock_ext_get_data(sock->sk);
 	ret = (*ref_inet_bind)(sock, &sock_ext_data->int_addr, addr_len);
 
 	/* We can use the port number now because inet_bind will have set

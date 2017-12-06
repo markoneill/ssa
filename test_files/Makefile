@@ -1,11 +1,11 @@
 CC = gcc
-CC_FLAGS = -w -g -Wall
+CC_FLAGS = -w -g -Wall -O3
  
 EXEC = tests
 SOURCES = $(wildcard *.c)
 OBJECTS = $(SOURCES:.c=.o)
 INCLUDES = 
-LIBS = 
+LIBS = -lcrypto -lssl  
  
 # Main target
 $(EXEC): $(OBJECTS)

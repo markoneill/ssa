@@ -48,7 +48,7 @@ def main(argv):
 #        subprocess.call("rm " + path, shell=True)
 #        subprocess.call("touch " + path, shell=True)
 
-    for i in range(0, 10):
+    for i in range(0, 100):
         print("Running iter: %i" % (i))
         subprocess.call("./tests >> results.txt", shell=True)
 

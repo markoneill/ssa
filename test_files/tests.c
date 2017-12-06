@@ -9,6 +9,13 @@
 #include <netdb.h>
 #include "../socktls.h"
 
+/* OpenSSL includes */
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+
 #define MAX_HOSTNAME	255
 #define BUFFER_MAX	1024
 
@@ -32,6 +39,11 @@ void run_listen_benchmark(void);
 void run_bind_baseline(void);
 void run_bind_benchmark(void);
 
+void run_remote_connect_baseline(void);
+void run_remote_connect_benchmark(void);
+void run_remote_connect_ssl_baseline(void);
+SSL* openssl_connect_to_host(int sock, char* hostname);
+
 int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y);
 
 int counter;
@@ -40,6 +52,13 @@ int main(int argc, char* argv[]) {
 	// Default counter value set. Separate starting value can be set
 	// at beginning of each function if necessary
 	counter = 0;
+
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	SSL_load_error_strings();
+
 	for (int i = 0; i < 100; i++) {
 		//run_sockops_tests();
 		//run_hostname_tests();
@@ -52,7 +71,10 @@ int main(int argc, char* argv[]) {
 		//run_listen_baseline();
 		//run_listen_benchmark();
 		//run_bind_baseline();
-		run_bind_benchmark();
+		//run_bind_benchmark();
+		//run_remote_connect_baseline();
+		run_remote_connect_benchmark();
+		//run_remote_connect_ssl_baseline();
 		counter++;
 	}
 	printf("All tests succeeded!\n");
@@ -118,6 +140,152 @@ void run_listen_tests(void) {
 		return;
 	}
 	handle_client(client, client_addr, client_addr_len);
+	close(sock_fd);
+	return;
+}
+
+void run_remote_connect_baseline(void) {
+	struct timeval tv;
+	struct timeval tv_after;
+	counter = 3000;
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock_fd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = inet_addr("192.168.21.103"), // 127.0.0.1
+        };
+	gettimeofday(&tv, NULL);
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
+
+	gettimeofday(&tv_after, NULL);
+	printf("[vanilla] Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[vanilla] After Connect: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
+
+	close(sock_fd);
+	return;
+}
+
+void run_remote_connect_ssl_baseline(void) {
+	struct timeval tv;
+	struct timeval tv_after;
+	SSL *tls;
+	counter = 3000;
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock_fd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = inet_addr("192.168.21.103"), // 127.0.0.1
+        };
+	gettimeofday(&tv, NULL);
+	
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
+
+	tls = openssl_connect_to_host(sock_fd, "openrebellion.com");
+
+	gettimeofday(&tv_after, NULL);
+	printf("[vanilla] Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[vanilla] After Connect: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
+
+	SSL_shutdown(tls);
+	close(sock_fd);
+	return;
+}
+
+SSL* openssl_connect_to_host(int sock, char* hostname) {
+	X509* cert;
+	SSL_CTX* tls_ctx;
+	SSL* tls;
+
+	tls_ctx = SSL_CTX_new(SSLv23_method());
+	if (tls_ctx == NULL) {
+		fprintf(stderr, "Could not create SSL_CTX\n");
+		exit(EXIT_FAILURE);
+	}
+	SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_NONE, NULL);
+/*	if (SSL_CTX_load_verify_locations(tls_ctx, root_store_filename_redhat, NULL) != 1) {
+		fprintf(stderr, "SSL_CTX_load_verify_locations failed\n");
+		exit(EXIT_FAILURE);
+	}
+*/
+	tls = SSL_new(tls_ctx);
+	SSL_CTX_free(tls_ctx); /* lower reference count now in case we need to early return */
+	if (tls == NULL) {
+		fprintf(stderr, "SSL_new from tls_ctx failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	/* set server name indication for client hello */
+	SSL_set_tlsext_host_name(tls, hostname);
+
+	/* Associate socket with TLS context */
+	SSL_set_fd(tls, sock);
+
+	if (SSL_connect(tls) != 1) {
+		fprintf(stderr, "Failed in SSL_connect\n");
+		exit(EXIT_FAILURE);
+	}
+/*
+	cert = SSL_get_peer_certificate(tls);
+	if (cert == NULL) {
+		fprintf(stderr, "Failed to get peer certificate\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (validate_hostname(hostname, cert) != MatchFound) {
+		fprintf(stderr, "Failed to validate hostname in certificate\n");
+		exit(EXIT_FAILURE);
+	}
+*/
+	return tls;
+}
+
+
+void run_remote_connect_benchmark(void) {
+	struct timeval tv;
+	struct timeval tv_after;
+	counter = 3000;
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
+	if (sock_fd == -1) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+
+	const char hostname[] = "openrebellion.com";
+        if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+		perror("setsockopt: SO_HOSTNAME");
+		exit(EXIT_FAILURE);
+	}
+        struct sockaddr_in dst_addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(8888),
+                .sin_addr.s_addr = inet_addr("192.168.21.103"), // 127.0.0.1
+        };
+	gettimeofday(&tv, NULL);
+	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
+
+	gettimeofday(&tv_after, NULL);
+	printf("Before connect: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("After Connect: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
+
 	close(sock_fd);
 	return;
 }
