@@ -38,31 +38,54 @@ def main(argv):
     global vanilla
     global path
 
-    if len(argv) == 1:
-        vanilla = True
-    else:
-        path += argv[1]
+    py_iter = 0
+    c_iter = 0
+    last_iter = 0
+    iterations = 0
+    test_val = -1
 
-    subprocess.call("rm results.txt", shell=True)
-#    if len(path):
-#        subprocess.call("rm " + path, shell=True)
-#        subprocess.call("touch " + path, shell=True)
+    test_dict = {"socket": 0, "connect": 2, "listen": 4, "bind": 6, "data": 8} 
 
-    for i in range(0, 100):
-        print("Running iter: %i" % (i))
-        subprocess.call("./tests >> results.txt", shell=True)
-
-    parse_from_loc("results.txt")
-
-    if (not vanilla):
-        parse_from_loc(path)
-       
-    if before_num != after_num:
-        print("Unequal number of results\nBefore: %i\nAfter: %i" % (before_num, after_num))
+    if len(argv) < 3:
+        print("usage: python time_parse.py <test> <iterations>")
         exit(0)
+    
+    test = sys.argv[1]
+    iterations = int(sys.argv[2])
+    if iterations < 1:
+        print("invalid iterations")
+        exit(0)
+    if test not in test_dict.keys():
+        print("invalid test")
+        exit(0)
+    test_val = test_dict[test]   
 
-    print("Iterations: %i\nAverage Time: %f\n" % (before_num, (after_total / float(after_num)) - (before_total / float(before_num))))
-    pass
+    if iterations < 100:
+        c_iter = iterations
+    else:
+        c_iter = 100
+        py_iter = (iterations // 100)
+        last_iter = iterations % 100
+
+    for i in range(0, 2):
+        subprocess.call("rm results.txt", shell=True)
+        before_total = 0
+        before_num = 0
+        after_total = 0
+        after_num = 0
+        for j in range (0, py_iter + 1):
+            print("Running iter: %i" % (j))
+            subprocess.call("./tests %i %i >> results.txt" % ((test_val + i), (c_iter if ((j + 1) != py_iter) else last_iter)), shell=True)
+        parse_from_loc("results.txt")
+
+        if before_num != after_num:
+            print("Unequal number of results\nBefore: %i\nAfter: %i" % (before_num, after_num))
+            exit(0)
+        if before_num == 0:
+            print("No results found")
+            exit(0)
+
+        print("Iterations: %i\nAverage Time %s: %f\n" % (before_num, "Baseline" if not i else "Benchmark", (after_total / float(after_num)) - (before_total / float(before_num))))
 
 if __name__ == "__main__":
     main(sys.argv)

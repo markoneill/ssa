@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include "../socktls.h"
 
 /* OpenSSL includes */
@@ -47,11 +48,44 @@ SSL* openssl_connect_to_host(int sock, char* hostname);
 int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* y);
 
 int counter;
+int pid = 0;
+
+void run_ssl_server(){
+	if (!pid) {
+		pid = fork();
+		if (pid == 0) {
+			char *args[] = {"test_server", "8888", NULL};
+			execv("tls_server/test_server", args);
+		} else {
+			sleep(2);
+		}
+	}
+}
+
+void sig_int_handler(int sig){
+	if (sig == SIGINT){
+		if (pid) {
+			char *message = "Shutting down server\n";
+			write(STDOUT_FILENO, message, strlen(message));
+			kill(pid, SIGINT);
+		}
+	}
+	_exit(0);
+}
 
 int main(int argc, char* argv[]) {
+	int iterations;
+	int test;
 	// Default counter value set. Separate starting value can be set
 	// at beginning of each function if necessary
 	counter = 0;
+
+	if (signal(SIGINT, sig_int_handler) == SIG_ERR){
+		perror("signal catch failure");
+	}
+
+	test = (int)strtol(argv[1], NULL, 10);
+	iterations = (int)strtol(argv[2], NULL, 10);
 
 	SSL_library_init();
 	OpenSSL_add_all_algorithms();
@@ -59,25 +93,44 @@ int main(int argc, char* argv[]) {
 	ERR_load_crypto_strings();
 	SSL_load_error_strings();
 
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < iterations; i++) {
 		//run_sockops_tests();
 		//run_hostname_tests();
 		//run_listen_tests();
 		//run_connect_tests();
-		//run_socket_baseline();
-		//run_socket_benchmark();
-		//run_connect_baseline();
-		//run_connect_benchmark();
-		//run_listen_baseline();
-		//run_listen_benchmark();
-		//run_bind_baseline();
-		//run_bind_benchmark();
+		switch(test) {
+			case 0: run_socket_baseline();
+			break;
+			case 1: run_socket_benchmark();
+			break;
+			case 2: run_connect_baseline();
+			break;
+			case 3: run_connect_benchmark();
+			break;
+			case 4: run_listen_baseline();
+			break;
+			case 5: run_listen_benchmark();
+			break;
+			case 6: run_bind_baseline();
+			break;
+			case 7: run_bind_benchmark();
+			break;
+			case 8: run_remote_connect_ssl_baseline();
+			break;
+			case 9:
+			break;
+			default:
+			break;
+		}
+			
 		//run_remote_connect_baseline();
-		run_remote_connect_benchmark();
-		//run_remote_connect_ssl_baseline();
+		//run_remote_connect_benchmark();
 		counter++;
 	}
 	printf("All tests succeeded!\n");
+	if (pid) {
+		kill(pid, SIGINT);
+	}
 	return 0;
 }
 
@@ -148,6 +201,9 @@ void run_remote_connect_baseline(void) {
 	struct timeval tv;
 	struct timeval tv_after;
 	counter = 3000;
+
+	run_ssl_server();	
+
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -177,6 +233,9 @@ void run_remote_connect_ssl_baseline(void) {
 	struct timeval tv;
 	struct timeval tv_after;
 	SSL *tls;
+
+	run_ssl_server();	
+
 	counter = 3000;
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock_fd == -1) {
@@ -260,6 +319,9 @@ void run_remote_connect_benchmark(void) {
 	struct timeval tv;
 	struct timeval tv_after;
 	counter = 3000;
+
+	run_ssl_server();	
+
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -274,7 +336,7 @@ void run_remote_connect_benchmark(void) {
         struct sockaddr_in dst_addr = {
                 .sin_family = AF_INET,
                 .sin_port = htons(8888),
-                .sin_addr.s_addr = inet_addr("192.168.21.103"), // 127.0.0.1
+                .sin_addr.s_addr = inet_addr("127.0.0.1"), // 127.0.0.1
         };
 	gettimeofday(&tv, NULL);
 	if (connect(sock_fd, (struct sockaddr*)&dst_addr, sizeof(dst_addr)) == -1) {
@@ -298,8 +360,8 @@ void run_socket_baseline(void) {
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 	gettimeofday(&tv_after, NULL);
-	printf("%i [Vanilla] Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
-	printf("%i [Vanilla] After socket: %ld.%06ld\n", counter, tv_after.tv_sec, tv_after.tv_usec);
+	printf("[Vanilla] Before socket: %ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+	printf("[Vanilla] After socket: %ld.%06ld\n", tv_after.tv_sec, tv_after.tv_usec);
 
 	close(sock_fd);
 }

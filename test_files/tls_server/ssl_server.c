@@ -35,6 +35,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <inttypes.h>
+#include <arpa/inet.h>
 
 #define FAIL    -1
 #define FILE_SIZE	100
@@ -184,12 +186,22 @@ int main(int count, char *strings[])
 {   SSL_CTX *ctx;
     int server;
     char *portnum;
+    char *addr_buf;
+    uint16_t port;
+    char cwd[1024];
 
     if ( count != 2 )
     {
         printf("Usage: %s <portnum>\n", strings[0]);
         exit(0);
     }
+
+	getcwd(cwd, sizeof(cwd));
+	strcpy(cwd + strlen(cwd), "/tls_server");
+	printf("New Directory: %s\n", cwd);
+	chdir(cwd); 
+
+
     portnum = strings[1];
     ctx = InitServerCTX();								/* initialize SSL */
     LoadCertificates(ctx, "pem_files/certificate.pem", "pem_files/key.pem");	/* load certs */
@@ -200,8 +212,14 @@ int main(int count, char *strings[])
         SSL *ssl;
 
         int client = accept(server, &addr, &len);		/* accept connection as usual */
-        printf("Connection: %s:%d\n",
-        	inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
+	addr_buf = inet_ntoa(addr.sin_addr);
+	if (addr_buf == NULL){
+		perror("inet_ntoa failure");
+		exit(0);
+	}
+	port = ntohs(addr.sin_port);
+        printf("Connection: %s:%" PRIu16 "\n", addr_buf, port);
         ssl = SSL_new(ctx);         					/* get new SSL state with context */
         SSL_set_fd(ssl, client);						/* set connection socket to SSL state */
         Servlet(ssl);									/* service connection */
