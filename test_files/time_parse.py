@@ -60,7 +60,7 @@ def main(argv):
         exit(0)
     test_val = test_dict[test]   
 
-    if iterations < 100:
+    if iterations <= 100:
         c_iter = iterations
     else:
         c_iter = 100

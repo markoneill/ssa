@@ -57,7 +57,33 @@ void run_ssl_server(){
 			char *args[] = {"test_server", "8888", NULL};
 			execv("tls_server/test_server", args);
 		} else {
-			sleep(2);
+			sleep(1);
+		}
+	}
+}
+
+void run_nc_server(){
+	if (!pid) {
+		printf("starting nc server\n");
+		pid = fork();
+		if (pid == 0) {
+			char *args[] = {"/bin/nc", "-l", "-k", "8888", NULL};
+			execv("/bin/nc", args);
+		} else {
+			sleep(1);
+		}
+	}
+}
+
+void run_s_server(){
+	if (!pid) {
+		printf("starting s_server\n");
+		pid = fork();
+		if (pid == 0) {
+			char *args[] = {"/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", NULL};
+			execv("/bin/openssl s_server", args);
+		} else {
+			sleep(1);
 		}
 	}
 }
@@ -371,7 +397,7 @@ void run_socket_benchmark(void) {
 	struct timeval tv_after;
 	gettimeofday(&tv, NULL);
 
-	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 
 	gettimeofday(&tv_after, NULL);
 	printf("%i Before socket: %ld.%06ld\n", counter, tv.tv_sec, tv.tv_usec);
@@ -384,6 +410,9 @@ void run_connect_baseline(void) {
 	struct timeval tv;
 	struct timeval tv_after;
 	counter = 0;
+
+	run_nc_server();
+
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock_fd == -1) {
 		perror("socket");
@@ -410,7 +439,9 @@ void run_connect_baseline(void) {
 void run_connect_benchmark(void) {
 	struct timeval tv;
 	struct timeval tv_after;
-	counter = 3000;
+
+	//run_s_server();
+
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
 		perror("socket");
