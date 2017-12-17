@@ -50,25 +50,27 @@ int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* 
 int counter;
 int pid = 0;
 
-void run_ssl_server(){
+void run_ssl_server() {
 	if (!pid) {
 		pid = fork();
 		if (pid == 0) {
 			char *args[] = {"test_server", "8888", NULL};
 			execv("tls_server/test_server", args);
+			printf(stderr, "Failed to execute test_server\n");
 		} else {
 			sleep(1);
 		}
 	}
 }
 
-void run_nc_server(){
+void run_nc_server() {
 	if (!pid) {
 		printf("starting nc server\n");
 		pid = fork();
 		if (pid == 0) {
 			char *args[] = {"/bin/nc", "-l", "-k", "8888", NULL};
 			execv("/bin/nc", args);
+			printf(stderr, "Failed to execute nc\n");
 		} else {
 			sleep(1);
 		}
@@ -81,7 +83,8 @@ void run_s_server(){
 		pid = fork();
 		if (pid == 0) {
 			char *args[] = {"/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", NULL};
-			execv("/bin/openssl s_server", args);
+			execv("/bin/openssl", args);
+			fprintf(stderr, "Failed to execute s_server\n");
 		} else {
 			sleep(1);
 		}
@@ -440,7 +443,7 @@ void run_connect_benchmark(void) {
 	struct timeval tv;
 	struct timeval tv_after;
 
-	//run_s_server();
+	run_s_server();
 
 	int sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS);
 	if (sock_fd == -1) {
