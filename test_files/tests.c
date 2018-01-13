@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <errno.h>
@@ -56,7 +57,7 @@ void run_ssl_server() {
 		if (pid == 0) {
 			char *args[] = {"test_server", "8888", NULL};
 			execv("tls_server/test_server", args);
-			printf(stderr, "Failed to execute test_server\n");
+			fprintf(stderr, "Failed to execute test_server\n");
 		} else {
 			sleep(1);
 		}
@@ -70,7 +71,7 @@ void run_nc_server() {
 		if (pid == 0) {
 			char *args[] = {"/bin/nc", "-l", "-k", "8888", NULL};
 			execv("/bin/nc", args);
-			printf(stderr, "Failed to execute nc\n");
+			fprintf(stderr, "Failed to execute nc\n");
 		} else {
 			sleep(1);
 		}
@@ -82,7 +83,7 @@ void run_s_server(){
 		printf("starting s_server\n");
 		pid = fork();
 		if (pid == 0) {
-			char *args[] = {"/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", NULL};
+			char *args[] = {"/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", "-quiet", NULL};
 			execv("/bin/openssl", args);
 			fprintf(stderr, "Failed to execute s_server\n");
 		} else {
