@@ -6,6 +6,7 @@
 
 int nl_fail(struct sk_buff* skb, struct genl_info* info);
 int daemon_cb(struct sk_buff* skb, struct genl_info* info);
+int daemon_data_cb(struct sk_buff* skb, struct genl_info* info);
 
 static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_UNSPEC] = { .type = NLA_UNSPEC },
@@ -29,6 +30,13 @@ static struct genl_ops ssa_nl_ops[] = {
         },
         {
                 .cmd = SSA_NL_C_SETSOCKOPT_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
+        {
+                .cmd = SSA_NL_C_GETSOCKOPT_NOTIFY,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
                 .doit = nl_fail,
@@ -67,6 +75,13 @@ static struct genl_ops ssa_nl_ops[] = {
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
                 .doit = daemon_cb,
+                .dumpit = NULL,
+        },
+        {
+                .cmd = SSA_NL_C_DATA_RETURN,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = daemon_data_cb,
                 .dumpit = NULL,
         },
 };
@@ -110,6 +125,30 @@ int daemon_cb(struct sk_buff* skb, struct genl_info* info) {
 	}
 	response = nla_get_u32(na);
 	report_return(key, response);
+        return 0;
+}
+
+int daemon_data_cb(struct sk_buff* skb, struct genl_info* info) {
+	struct nlattr* na;
+	unsigned long key;
+	unsigned int len;
+	char* data;
+	if (info == NULL) {
+		printk(KERN_ALERT "Netlink: Message info is null\n");
+		return -1;
+	}
+	if ((na = info->attrs[SSA_NL_A_ID]) == NULL) {
+		printk(KERN_ALERT "Netlink: Unable to retrieve socket ID\n");
+		return -1;
+	}
+	key = nla_get_u64(na);
+	if ((na = info->attrs[SSA_NL_A_OPTVAL]) == NULL) {
+		printk(KERN_ALERT "Netlink: Unable to get optval from data message\n");
+		return -1;
+	}
+	data = nla_data(na);
+	len = nla_len(na);
+	report_data_return(key, data, len);
         return 0;
 }
 
@@ -196,6 +235,48 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify] (%d)\n", ret);
+	}
+	return 0;
+}
+
+int send_getsockopt_notification(unsigned long id, int level, int optname) {
+	struct sk_buff* skb;
+	int ret;
+	void* msg_head;
+
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	if (skb == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_new [getsockopt notify]\n");
+		return -1;
+	}
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_GETSOCKOPT_NOTIFY);
+	if (msg_head == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_put [getsockopt notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (id) [getsockopt notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_OPTLEVEL, sizeof(int), &level);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (level) [getsockopt notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_OPTNAME, sizeof(int), &optname);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (optname) [getsockopt notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	genlmsg_end(skb, msg_head);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [getsockopt notify] (%d)\n", ret);
 	}
 	return 0;
 }

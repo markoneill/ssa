@@ -21,6 +21,8 @@ typedef struct tls_sock_ext_data {
         struct sock* sk;
 	struct completion sock_event;
 	int response;
+	char* data;
+	unsigned int data_len;
 } tls_sock_ext_data_t;
 
 /* Corresponding TLS override functions */
@@ -46,5 +48,6 @@ tls_sock_ext_data_t* tls_sock_ext_get_data(struct sock* sk);
 void tls_setup(void);
 void tls_cleanup(void);
 void report_return(unsigned long key, int ret);
+void report_data_return(unsigned long key, char* data, unsigned int len);
 
 #endif

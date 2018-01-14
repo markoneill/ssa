@@ -1,7 +1,8 @@
 #ifndef SOCKTLS_H
 #define SOCKTLS_H
 
-#define SO_HOSTNAME	85
+#define SO_HOSTNAME		85
+#define SO_PEER_CERTIFICATE	86
 #define IPPROTO_TLS 	(715 % 255)
 
 #define AF_HOSTNAME	43

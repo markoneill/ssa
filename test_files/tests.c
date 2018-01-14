@@ -41,6 +41,9 @@ void run_listen_benchmark(void);
 void run_bind_baseline(void);
 void run_bind_benchmark(void);
 
+/* Independent tests */
+void run_get_cert_test(void);
+
 void run_remote_connect_baseline(void);
 void run_remote_connect_benchmark(void);
 void run_remote_connect_ssl_baseline(void);
@@ -147,7 +150,7 @@ int main(int argc, char* argv[]) {
 			break;
 			case 8: run_remote_connect_ssl_baseline();
 			break;
-			case 9:
+			case 9: run_get_cert_test();
 			break;
 			default:
 			break;
@@ -861,4 +864,21 @@ int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* 
 
 	/* Return 1 if result is negative. */
 	return x->tv_sec < y_cpy.tv_sec;
+}
+
+void run_get_cert_test(void) {
+	int sock_fd = connect_to_host("www.google.com", "443");
+	char http_request[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
+	char http_response[1024*1024];
+	int cert_len = 1024*4;
+	char cert[1024*4];
+	memset(http_response, 0, 4096);
+	if (getsockopt(sock_fd, IPPROTO_TLS, SO_PEER_CERTIFICATE, cert, &cert_len) == -1) {
+		perror("Failed in getsockopt:");
+	}
+	printf("%s\n", cert);
+	send(sock_fd, http_request, sizeof(http_request), 0);
+	recv(sock_fd, http_response, 4096, 0);
+	//printf("%s", http_response);
+	close(sock_fd);
 }

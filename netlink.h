@@ -25,11 +25,13 @@ enum {
         SSA_NL_C_UNSPEC,
         SSA_NL_C_SOCKET_NOTIFY,
 	SSA_NL_C_SETSOCKOPT_NOTIFY,
+	SSA_NL_C_GETSOCKOPT_NOTIFY,
         SSA_NL_C_BIND_NOTIFY,
         SSA_NL_C_CONNECT_NOTIFY,
         SSA_NL_C_LISTEN_NOTIFY,
 	SSA_NL_C_CLOSE_NOTIFY,
 	SSA_NL_C_RETURN,
+	SSA_NL_C_DATA_RETURN,
         __SSA_NL_C_MAX,
 };
 
@@ -44,6 +46,7 @@ enum ssa_nl_groups {
 int register_netlink(void);
 int send_socket_notification(unsigned long id);
 int send_setsockopt_notification(unsigned long id, int level, int optname, void* optval, int optlen);
+int send_getsockopt_notification(unsigned long id, int level, int optname);
 int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);

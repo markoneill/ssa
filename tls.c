@@ -361,9 +361,52 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 }
 
 int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen) {
+	int len;
+	tls_sock_ext_data_t* sock_ext_data;
+	sock_ext_data = tls_sock_ext_get_data(sk);
+	if (optval == NULL) {
+		return -EINVAL;	
+	}
+	if (optlen == NULL) {
+		return -EINVAL;
+	}
 	switch (optname) {
 		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
+		case SO_PEER_CERTIFICATE:
+		/* We'll probably add all other daemon-required getsockopt options here
+		 * as fall-through cases
+		 */
+			send_getsockopt_notification((unsigned long)sk, level, optname);
+			if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+				/* Let's lie to the application if the daemon isn't responding */
+				return -ENOBUFS;
+			}
+			if (sock_ext_data->data_len == 0) {
+				return -ENOBUFS;
+			}
+
+			if (get_user(len, optlen)) {
+				return -EFAULT;
+			}
+			if (len < sock_ext_data->data_len) {
+				return -EFAULT;
+			}
+
+			/* If we got this far, we know the user has enough memory allocated */
+			len = sock_ext_data->data_len;
+			if (put_user(len, optlen)) {
+				return -EFAULT;
+			}
+			if (copy_to_user(optval, sock_ext_data->data, len)) {
+				return -EFAULT;
+			}
+
+			/* XXX this should really be done on every fail case */
+			kfree(sock_ext_data->data);
+			sock_ext_data->data = NULL;
+			sock_ext_data->data_len = 0;
+			break;
 		default:
 			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
 	}
@@ -438,6 +481,20 @@ void report_return(unsigned long key, int ret) {
 	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
 	BUG_ON(sock_ext_data == NULL);
 	sock_ext_data->response = ret;
+	complete(&sock_ext_data->sock_event);
+	return;
+}
+
+void report_data_return(unsigned long key, char* data, unsigned int len) {
+	tls_sock_ext_data_t* sock_ext_data;
+	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
+	BUG_ON(sock_ext_data == NULL);
+	sock_ext_data->data = kmalloc(len, GFP_ATOMIC);
+	if (sock_ext_data->data == NULL) {
+		printk(KERN_ALERT "failed to create memory for getsockopt return\n");
+	}
+	memcpy(sock_ext_data->data, data, len);
+	sock_ext_data->data_len = len;
 	complete(&sock_ext_data->sock_event);
 	return;
 }
