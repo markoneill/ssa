@@ -364,48 +364,43 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	int len;
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
-	if (optval == NULL) {
-		return -EINVAL;	
-	}
-	if (optlen == NULL) {
-		return -EINVAL;
+	if (get_user(len, optlen)) {
+		return -EFAULT;
 	}
 	switch (optname) {
 		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
 		case SO_PEER_CERTIFICATE:
 		/* We'll probably add all other daemon-required getsockopt options here
-		 * as fall-through cases
+		 * as fall-through cases. The following implementation is fairly generic.
 		 */
 			send_getsockopt_notification((unsigned long)sk, level, optname);
 			if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 				/* Let's lie to the application if the daemon isn't responding */
 				return -ENOBUFS;
 			}
-			if (sock_ext_data->data_len == 0) {
-				return -ENOBUFS;
+			if (sock_ext_data->response != 0) {
+				return sock_ext_data->response;
 			}
 
-			if (get_user(len, optlen)) {
-				return -EFAULT;
-			}
-			if (len < sock_ext_data->data_len) {
-				return -EFAULT;
-			}
 
-			/* If we got this far, we know the user has enough memory allocated */
-			len = sock_ext_data->data_len;
-			if (put_user(len, optlen)) {
+			/* We set this to the minimum of actual data length and size
+			 * of user's buffer rather than aborting if the user one is 
+			 * smaller because POSIX says to silently truncate in this
+			 * case */
+			len = min_t(unsigned int, len, sock_ext_data->data_len);
+			if (unlikely(put_user(len, optlen))) {
+				kfree(sock_ext_data->data);
+				sock_ext_data->data = NULL;
+				sock_ext_data->data_len = 0;
 				return -EFAULT;
 			}
 			if (copy_to_user(optval, sock_ext_data->data, len)) {
+				kfree(sock_ext_data->data);
+				sock_ext_data->data = NULL;
+				sock_ext_data->data_len = 0;
 				return -EFAULT;
 			}
-
-			/* XXX this should really be done on every fail case */
-			kfree(sock_ext_data->data);
-			sock_ext_data->data = NULL;
-			sock_ext_data->data_len = 0;
 			break;
 		default:
 			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
@@ -495,6 +490,10 @@ void report_data_return(unsigned long key, char* data, unsigned int len) {
 	}
 	memcpy(sock_ext_data->data, data, len);
 	sock_ext_data->data_len = len;
+	/* set success if this callback is used.
+	 * The report_return case is for errors
+	 * and simple statuses */
+	sock_ext_data->response = 0;
 	complete(&sock_ext_data->sock_event);
 	return;
 }
