@@ -866,6 +866,38 @@ int timeval_subtract(struct timeval* result, struct timeval* x, struct timeval* 
 	return x->tv_sec < y_cpy.tv_sec;
 }
 
+
+X509* PEM_str_to_X509(char* pem_str) {
+	X509* cert;
+	BIO* bio;
+
+	if (pem_str == NULL) {
+		return NULL;
+	}
+
+	bio = BIO_new_mem_buf(pem_str, strlen(pem_str));
+	if (bio == NULL) {
+		return NULL;
+	}
+	
+	cert = PEM_read_bio_X509(bio, NULL, NULL, NULL);
+	if (cert == NULL) {
+		return NULL;
+	}
+
+	BIO_free(bio);
+	return cert;
+}
+
+void print_certificate(X509* cert) {
+	char subj[BUFFER_MAX+1];
+	char issuer[BUFFER_MAX+1];
+	X509_NAME_oneline(X509_get_subject_name(cert), subj, BUFFER_MAX);
+	X509_NAME_oneline(X509_get_issuer_name(cert), issuer, BUFFER_MAX);
+	printf("subject: %s\n", subj);
+	printf("issuer: %s\n", issuer);
+}
+
 void run_get_cert_test(void) {
 	int sock_fd = connect_to_host("www.google.com", "443");
 	char http_request[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
@@ -877,6 +909,12 @@ void run_get_cert_test(void) {
 		perror("Failed in getsockopt:");
 	}
 	printf("%s\n", cert);
+	/* Cert conversion to an X509 OpenSSL Object */
+	X509* cert_openssl = PEM_str_to_X509(cert);
+	if (cert_openssl != NULL) {
+		print_certificate(cert_openssl);
+	}
+
 	send(sock_fd, http_request, sizeof(http_request), 0);
 	recv(sock_fd, http_response, 4096, 0);
 	//printf("%s", http_response);
