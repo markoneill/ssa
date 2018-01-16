@@ -324,6 +324,8 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 		case SO_HOSTNAME:
 			ret = set_hostname(sock_ext_data, koptval, len);
 			break;
+		case SO_CERTIFICATE_CHAIN:
+		case SO_PRIVATE_KEY:
 		default:
 			ret = 0;
 			break;
@@ -351,6 +353,8 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 
 	switch (optname) {
 		case SO_HOSTNAME:
+		case SO_CERTIFICATE_CHAIN:
+		case SO_PRIVATE_KEY:
 			break;
 		default:
 			/* Now we do the same thing to the application socket, if applicable */
