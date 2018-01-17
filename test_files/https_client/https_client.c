@@ -15,7 +15,7 @@ int main() {
 	char http_request[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
 	char http_response[2048];
 	memset(http_response, 0, 2048);
-	send(sock_fd, http_request, sizeof(http_request), 0);
+	send(sock_fd, http_request, sizeof(http_request)-1, 0);
 	recv(sock_fd, http_response, 750, 0);
 	printf("Received:\n%s", http_response);
 	close(sock_fd);

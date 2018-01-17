@@ -31,7 +31,7 @@ void * threaded_connection(){
 	char http_response[2048];
 	memset(http_response, 0, 2048);
     for(int i = 0; i < CALLS_PER_THREAD; i++){
-	    send_func(sock_fd, http_request,sizeof(http_request));
+	    send_func(sock_fd, http_request,sizeof(http_request)-1);
 	    recv_func(sock_fd, http_response);
     }
 	//printf("Received:\n%s", http_response);
@@ -42,7 +42,7 @@ void send_func(int sock_fd, char* http_request,int len) {
 	send(sock_fd, http_request, len, 0);
 }
 void recv_func(int sock_fd,char* http_response){
-    recv(sock_fd, http_response, 750, 0);
+    recv(sock_fd, http_response, 750, 0); /* Just grab up to the first 750 bytes from the host (for now) */
 }
 int connect_to_host(char* host, char* service) {
 	int sock;
