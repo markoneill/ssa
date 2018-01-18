@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/signal.h>
 #include <netdb.h>
 #include <pthread.h>
 #include "../../socktls.h"
@@ -14,8 +15,9 @@ void * threaded_connection();
 void recv_func(int sock_fd,char* http_response);
 void send_func(int sock_fd, char* http_request,int len);
 int const CALLS_PER_THREAD = 2;
-int const NUM_THREADS = 2;
+int const NUM_THREADS = 10;
 int main() {
+	signal(SIGPIPE, SIG_IGN);
     pthread_t t[NUM_THREADS];
 	for(int i = 0; i < NUM_THREADS ; i++){
         pthread_create(&t[i], NULL, threaded_connection,NULL);
@@ -26,15 +28,17 @@ int main() {
     return 0;
 }
 void * threaded_connection(){
-    int sock_fd = connect_to_host("sebulba.cs.byu.edu", "443");
-	char http_request[] = "GET / HTTP/1.1\r\nHost: sebulba.cs.byu.edu\r\n\r\n";
+    int sock_fd = connect_to_host("www.phoenixteam.net", "443");
+	char http_request[] = "GET / HTTP/1.1\r\nHost: www.phoenixteam.net\r\n\r\n";
+	
 	char http_response[2048];
 	memset(http_response, 0, 2048);
     for(int i = 0; i < CALLS_PER_THREAD; i++){
 	    send_func(sock_fd, http_request,sizeof(http_request)-1);
 	    recv_func(sock_fd, http_response);
-    }
+	    printf("Iteration %d completed for thread ID %ld\n", i, pthread_self());
 	//printf("Received:\n%s", http_response);
+    }
 	close(sock_fd);
     return NULL;
 }

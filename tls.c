@@ -479,6 +479,9 @@ void report_return(unsigned long key, int ret) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
 	BUG_ON(sock_ext_data == NULL);
+	if (sock_ext_data == NULL) {
+		return;
+	}
 	sock_ext_data->response = ret;
 	complete(&sock_ext_data->sock_event);
 	return;
