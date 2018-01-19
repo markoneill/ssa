@@ -20,7 +20,7 @@ void * threaded_connection();
 void recv_func(int sock_fd,char* http_response);
 void send_func(int sock_fd, char* http_request,int len);
 int const CALLS_PER_THREAD = 2000;
-int const NUM_THREADS = 10;
+int const NUM_THREADS = 50;
 
 int main() {
 	int i;

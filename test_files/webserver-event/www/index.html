@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Webserver Lab Testing</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+</head>
+<body>
+
+<div class="jumbotron text-center">
+  <h1>Webserver Lab Testing</h1>
+  <p>This page should load external styles and javascript and 3 local images of different types</p>
+</div>
+
+<div class="container text-center">
+  <div class="row">
+    <div class="col-sm-4">
+      <h3>JPEG Image</h3>
+      <img src="byu-logo.jpg" alt="BYU Logo" />
+    </div>
+    <div class="col-sm-4">
+      <h3>PNG Image</h3>
+      <img src="beehive.png" alt="Beehive" />
+    </div>
+    <div class="col-sm-4">
+      <h3>GIF Image</h3>
+      <img src="byu-y.gif" alt="Y Mountain" />
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row">
+    <div class="col-sm-12">
+      <h3>Files</h3>
+      <div class="list-group">
+        <a href="myfile.txt" class="list-group-item list-group-item-action flex-column align-items-start">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">myfile.txt</h5>
+          </div>
+          <p class="mb-1">A simple text file that should be served using the text/plain MIME type.</p>
+        </a>
+        <a href="largefile.txt" class="list-group-item list-group-item-action flex-column align-items-start">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">largefile.txt</h5>
+          </div>
+          <p class="mb-1">A rather large text file containing a dictionary for simple password cracking.</p>
+        </a>
+        <a href="I-Have-A-Dream.pdf" class="list-group-item list-group-item-action flex-column align-items-start">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">I Have a Dream, by Martin Lurther King, Jr.</h5>
+          </div>
+          <p class="mb-1">PDF of MLK's famous speech. Should be served using the application/pdf MIME type.</p>
+        </a>
+        <a href="test.txt" class="list-group-item list-group-item-action flex-column align-items-start">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">test.txt</h5>
+          </div>
+          <p class="mb-1">This file should not be able to be served and instead trigger an error 403. Use "chmod 0 test.txt" before testing to make the file unreadable.</p>
+        </a>
+        <a href="not-here" class="list-group-item list-group-item-action flex-column align-items-start">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">not-here</h5>
+          </div>
+          <p class="mb-1">This file does not exist and should trigger an error 404.</p>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

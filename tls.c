@@ -11,7 +11,7 @@
 #include "netlink.h"
 #include "tls.h"
 
-#define RESPONSE_TIMEOUT	HZ
+#define RESPONSE_TIMEOUT	HZ*100
 #define HASH_TABLE_BITSIZE	9
 #define REROUTE_PORT		8443
 
