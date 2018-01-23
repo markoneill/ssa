@@ -84,6 +84,13 @@ static struct genl_ops ssa_nl_ops[] = {
                 .doit = daemon_data_cb,
                 .dumpit = NULL,
         },
+        {
+                .cmd = SSA_NL_C_UPGRADE_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
 };
 
 static const struct genl_multicast_group ssa_nl_grps[] = {
@@ -166,7 +173,7 @@ int send_socket_notification(unsigned long id) {
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(32, GFP_ATOMIC);
+	skb = genlmsg_new(32, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [socket notify]\n");
 		return -1;
@@ -184,7 +191,7 @@ int send_socket_notification(unsigned long id) {
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [socket notify] (%d)\n", ret);
 	}
@@ -196,7 +203,7 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [setsockopt notify]\n");
 		return -1;
@@ -232,7 +239,7 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify] (%d)\n", ret);
 	}
@@ -244,7 +251,7 @@ int send_getsockopt_notification(unsigned long id, int level, int optname) {
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [getsockopt notify]\n");
 		return -1;
@@ -274,7 +281,7 @@ int send_getsockopt_notification(unsigned long id, int level, int optname) {
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [getsockopt notify] (%d)\n", ret);
 	}
@@ -286,7 +293,7 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(64, GFP_ATOMIC);
+	skb = genlmsg_new(64, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [bind notify]\n");
 		return -1;
@@ -316,7 +323,7 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [bind notify] (%d)\n", ret);
 	}
@@ -328,7 +335,7 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [connect notify]\n");
 		return -1;
@@ -358,7 +365,7 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [connect notify]\n (%d)", ret);
 	}
@@ -370,7 +377,7 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	int ret;
 	void* msg_head;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [listen notify]\n");
 		return -1;
@@ -400,7 +407,7 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_ATOMIC);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [listen notify] (%d)\n", ret);
 	}
@@ -437,3 +444,40 @@ int send_close_notification(unsigned long id) {
 	}
 	return 0;
 }
+
+int send_upgrade_notification(unsigned long id, struct sockaddr* src_addr) {
+	struct sk_buff* skb;
+	int ret;
+	void* msg_head;
+
+	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	if (skb == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_new [upgrade notify]\n");
+		return -1;
+	}
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_UPGRADE_NOTIFY);
+	if (msg_head == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_put [upgrade notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (id) [upgrade notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_SOCKADDR_INTERNAL, sizeof(struct sockaddr), src_addr);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (internal) [upgrade notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	genlmsg_end(skb, msg_head);
+	ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [upgrade notify]\n (%d)", ret);
+	}
+	return 0;
+}
+

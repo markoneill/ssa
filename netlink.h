@@ -32,6 +32,7 @@ enum {
 	SSA_NL_C_CLOSE_NOTIFY,
 	SSA_NL_C_RETURN,
 	SSA_NL_C_DATA_RETURN,
+	SSA_NL_C_UPGRADE_NOTIFY,
         __SSA_NL_C_MAX,
 };
 
@@ -51,6 +52,7 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr);
 int send_close_notification(unsigned long id);
+int send_upgrade_notification(unsigned long id, struct sockaddr* src_addr);
 void unregister_netlink(void);
 
 #endif
