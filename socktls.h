@@ -7,6 +7,7 @@
 #define SO_PEER_CERTIFICATE     86
 #define SO_CERTIFICATE_CHAIN    87
 #define SO_PRIVATE_KEY          88
+#define SO_GET_ID	        89
 
 
 #define AF_HOSTNAME	43

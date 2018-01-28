@@ -50,6 +50,11 @@ int (*ref_inet_listen)(struct socket *sock, int backlog);
 int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
 int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
+/* unix stream reference functions */
+int (*ref_unix_listen)(struct socket *sock, int backlog);
+int (*ref_unix_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
+int (*ref_unix_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
+
 /* The TLS protocol structure to be registered */
 static struct inet_protosw tls_stream_protosw = {
 	.type		= SOCK_STREAM,

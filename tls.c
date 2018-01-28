@@ -41,6 +41,7 @@ extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int f
 extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
+int get_id(struct sock* sk, char __user *optval, int* __user optlen);
 int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int len);
 int is_valid_host_string(char* str, int len);
 
@@ -130,6 +131,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	int ret;
+	struct sockaddr_in* uaddr_in;
 	struct sockaddr_in int_addr = {
 		.sin_family = AF_INET,
 		.sin_port = 0,
@@ -153,6 +155,18 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		memcpy(&sock_ext_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_ext_data->int_addrlen = sizeof(int_addr);
 		sock_ext_data->has_bound = 1;
+	}
+
+	/* Handle case wherein a socket is connecting directly to the daemon */
+	uaddr_in = (struct sockaddr_in*)uaddr;
+	if (uaddr_in->sin_port == htons(8443) && uaddr_in->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+		ret = (*ref_tcp_v4_connect)(sk, uaddr, addr_len);
+		if (ret != 0) {
+			return ret;
+		}
+		sock_ext_data->is_connected = 1;
+		return 0;
+		/* We don't notify in this case */
 	}
 
 	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr);
@@ -374,6 +388,8 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	switch (optname) {
 		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
+		case SO_GET_ID:
+			return get_id(sk, optval, optlen);
 		case SO_PEER_CERTIFICATE:
 		/* We'll probably add all other daemon-required getsockopt options here
 		 * as fall-through cases. The following implementation is fairly generic.
@@ -450,6 +466,22 @@ int get_hostname(struct sock* sk, char __user *optval, int* __user len) {
 		return -EFAULT;
 	}
 	*len = hostname_len;
+	return 0;
+}
+
+/* The ID is just the pointer value sk */
+int get_id(struct sock* sk, char __user *optval, int* __user optlen) {
+	int len;
+	if (get_user(len, optlen)) {
+		return -EFAULT;
+	}
+	len = min_t(unsigned int, len, sizeof(sk));
+	if (put_user(len, optlen)) {
+		return -EFAULT;
+	}
+	if (copy_to_user(optval, &sk, len)) {
+		return -EFAULT;
+	}
 	return 0;
 }
 
