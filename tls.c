@@ -131,7 +131,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 /* Overriden TLS connect for v4 function */
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	int ret;
-	struct sockaddr_in* uaddr_in;
+	/*struct sockaddr_in* uaddr_in;*/
 	struct sockaddr_in int_addr = {
 		.sin_family = AF_INET,
 		.sin_port = 0,
@@ -158,7 +158,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	}
 
 	/* Handle case wherein a socket is connecting directly to the daemon */
-	uaddr_in = (struct sockaddr_in*)uaddr;
+	/*uaddr_in = (struct sockaddr_in*)uaddr;
 	if (uaddr_in->sin_port == htons(8443) && uaddr_in->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
 		ret = (*ref_tcp_v4_connect)(sk, uaddr, addr_len);
 		if (ret != 0) {
@@ -166,8 +166,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		}
 		sock_ext_data->is_connected = 1;
 		return 0;
-		/* We don't notify in this case */
-	}
+	}*/
 
 	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
@@ -388,7 +387,7 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 	switch (optname) {
 		case SO_HOSTNAME:
 			return get_hostname(sk, optval, optlen);
-		case SO_GET_ID:
+		case SO_ID:
 			return get_id(sk, optval, optlen);
 		case SO_PEER_CERTIFICATE:
 		/* We'll probably add all other daemon-required getsockopt options here
