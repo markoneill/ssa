@@ -23,6 +23,7 @@ typedef struct tls_sock_ext_data {
 	int response;
 	char* data;
 	unsigned int data_len;
+	int daemon_id;
 } tls_sock_ext_data_t;
 
 /* Corresponding TLS override functions */

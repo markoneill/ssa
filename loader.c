@@ -16,6 +16,7 @@
 #include <linux/sched.h>
 #include <linux/in.h>
 #include <linux/capability.h>
+#include <linux/cpumask.h>
 #include "tls.h"
 #include "socktls.h"
 
@@ -150,6 +151,7 @@ static int __init tls_init(void) {
 	unsigned long kallsyms_err;
 
 	printk(KERN_INFO "Initializing TLS module\n");
+	printk(KERN_INFO "Found %u CPUs\n", nr_cpu_ids);
 	
 	/* initialize our global data structures for TLS handling */
 	tls_setup();

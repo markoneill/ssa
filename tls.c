@@ -7,13 +7,14 @@
 #include <linux/net.h>
 #include <linux/ctype.h>
 #include <linux/completion.h>
+#include <linux/cpumask.h>
 #include "socktls.h"
 #include "netlink.h"
 #include "tls.h"
 
 #define RESPONSE_TIMEOUT	HZ*100
 #define HASH_TABLE_BITSIZE	9
-#define REROUTE_PORT		8443
+#define DAEMON_START_PORT	8443
 
 #define MAX_HOST_LEN		255
 
@@ -45,11 +46,7 @@ int get_id(struct sock* sk, char __user *optval, int* __user optlen);
 int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int len);
 int is_valid_host_string(char* str, int len);
 
-struct sockaddr_in reroute_addr = {
-	.sin_family = AF_INET,
-	.sin_port = htons(REROUTE_PORT),
-	.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
-};
+unsigned int balancer = 0;
 
 /* Original AF Inet reference functions */
 int tls_inet_listen(struct socket *sock, int backlog) {
@@ -77,7 +74,8 @@ int tls_inet_listen(struct socket *sock, int backlog) {
 	}
 	send_listen_notification((unsigned long)sock->sk, 
 			(struct sockaddr*)&sock_ext_data->int_addr,
-		        (struct sockaddr*)&sock_ext_data->ext_addr);
+		        (struct sockaddr*)&sock_ext_data->ext_addr,
+			sock_ext_data->daemon_id);
 
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
@@ -113,7 +111,8 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 		return ret;
 	}
 
-	send_bind_notification((unsigned long)sock->sk, &sock_ext_data->int_addr, (struct sockaddr*)uaddr);
+	send_bind_notification((unsigned long)sock->sk, &sock_ext_data->int_addr, (struct sockaddr*)uaddr,
+			sock_ext_data->daemon_id);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EADDRINUSE;
@@ -132,6 +131,11 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	int ret;
 	/*struct sockaddr_in* uaddr_in;*/
+	struct sockaddr_in reroute_addr = {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+	};
+
 	struct sockaddr_in int_addr = {
 		.sin_family = AF_INET,
 		.sin_port = 0,
@@ -168,7 +172,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 		return 0;
 	}*/
 
-	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr);
+	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr, sock_ext_data->daemon_id);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;
@@ -176,6 +180,7 @@ int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	if (sock_ext_data->response != 0) {
 		return sock_ext_data->response;
 	}
+	reroute_addr.sin_port = htons(sock_ext_data->daemon_id);
 	ret = (*ref_tcp_v4_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
 	if (ret != 0) {
 		return ret;
@@ -234,13 +239,17 @@ int tls_v4_init_sock(struct sock *sk) {
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
+	sock_ext_data->daemon_id = DAEMON_START_PORT;
+	//sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
+	//printk(KERN_INFO "Assigning new socket to daemon %d\n", sock_ext_data->daemon_id);
+	balancer = (balancer+1) % nr_cpu_ids;
 	init_completion(&sock_ext_data->sock_event);
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
 	ret = (*ref_tcp_v4_init_sock)(sk);
 
-	send_socket_notification((unsigned long)sk);
+	send_socket_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking return values here because init_sock always returns 0 */
 	return ret;
@@ -251,7 +260,7 @@ void tls_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data == NULL) {
 		return;
 	}
-	send_close_notification((unsigned long)sk);
+	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
@@ -352,7 +361,7 @@ int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval,
 		return ret;
 	}
 
-	send_setsockopt_notification((unsigned long)sk, level, optname, koptval, len);
+	send_setsockopt_notification((unsigned long)sk, level, optname, koptval, len, sock_ext_data->daemon_id);
 	kfree(koptval);
 	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
@@ -393,7 +402,7 @@ int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
 		/* We'll probably add all other daemon-required getsockopt options here
 		 * as fall-through cases. The following implementation is fairly generic.
 		 */
-			send_getsockopt_notification((unsigned long)sk, level, optname);
+			send_getsockopt_notification((unsigned long)sk, level, optname, sock_ext_data->daemon_id);
 			if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 				/* Let's lie to the application if the daemon isn't responding */
 				return -ENOBUFS;
