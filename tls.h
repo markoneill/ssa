@@ -5,6 +5,10 @@
 #include <linux/completion.h>
 
 /* Holds additional data needed by our TLS sockets */
+/* This structure only works because sockaddr is going
+ * to be bigger than our sockaddr_un addresses, which are
+ * always abstract (and thus 6 bytes + sizeof(sa_family_t))
+ */
 typedef struct tls_sock_ext_data {
         unsigned long key;
         struct hlist_node hash;
@@ -26,19 +30,36 @@ typedef struct tls_sock_ext_data {
 	int daemon_id;
 } tls_sock_ext_data_t;
 
-/* Corresponding TLS override functions */
-int tls_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-int tls_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-int tls_disconnect(struct sock *sk, int flags);
-void tls_shutdown(struct sock *sk, int how);
-int tls_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+/* TLS override functions for Unix */
+int tls_unix_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int tls_unix_disconnect(struct sock *sk, int flags);
+void tls_unix_shutdown(struct sock *sk, int how);
+int tls_unix_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 		int flags, int *addr_len);
-int tls_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
-int tls_v4_init_sock(struct sock *sk);
-void tls_v4_destroy_sock(struct sock* sk);
-void tls_close(struct sock *sk, long timeout);
-int tls_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
-int tls_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+int tls_unix_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
+int tls_unix_init_sock(struct sock *sk);
+void tls_unix_destroy_sock(struct sock* sk);
+void tls_unix_close(struct sock *sk, long timeout);
+int tls_unix_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
+int tls_unix_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+
+int tls_unix_listen(struct socket *sock, int backlog);
+int tls_unix_accept(struct socket *sock, struct socket *newsock, int flags, bool kern);
+int tls_unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len);
+
+/* Corresponding TLS override functions for TCP */
+int tls_tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int tls_tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int tls_tcp_disconnect(struct sock *sk, int flags);
+void tls_tcp_shutdown(struct sock *sk, int how);
+int tls_tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+		int flags, int *addr_len);
+int tls_tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size);
+int tls_tcp_v4_init_sock(struct sock *sk);
+void tls_tcp_v4_destroy_sock(struct sock* sk);
+void tls_tcp_close(struct sock *sk, long timeout);
+int tls_tcp_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
+int tls_tcp_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
 int tls_inet_listen(struct socket *sock, int backlog);
 int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern);

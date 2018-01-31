@@ -49,6 +49,19 @@ int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *
 typedef int (*tcp_setsockopt_t)(struct sock*, int, int, char __user*, unsigned int);
 tcp_setsockopt_t orig_tcp_setsockopt = NULL;
 
+/* Original Unix domain reference functions */
+int (*ref_unix_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
+int (*ref_unix_disconnect)(struct sock *sk, int flags);
+void (*ref_unix_shutdown)(struct sock *sk, int how);
+int (*ref_unix_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
+                        int flags, int *addr_len);
+int (*ref_unix_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
+int (*ref_unix_init_sock)(struct sock *sk);
+void (*ref_unix_destroy_sock)(struct sock *sk);
+void (*ref_unix_close)(struct sock *sk, long timeout);
+int (*ref_unix_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
+int (*ref_unix_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+
 /* inet stream reference functions */
 int (*ref_inet_listen)(struct socket *sock, int backlog);
 int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
@@ -73,11 +86,70 @@ struct percpu_counter tls_orphan_count;
 struct percpu_counter tls_sockets_allocated;
 
 
-/*
- *	Creates a copy of the tcp_prot structure and overrides
- *	posix method's functionality.
- */
-int set_tls_prot(void) {
+int set_tls_prot_unix(void) {
+	struct socket* sock;
+	if (sock_create(PF_UNIX, SOCK_STREAM, 0, &sock) != 0) {
+		printk(KERN_ALERT "Could not create dummy Unix socket in kernel\n");
+		return -1;
+	}
+	tls_prot = *(sock->sk->sk_prot);
+
+	strcpy(tls_prot.name, "TLS");
+	tls_prot.owner = THIS_MODULE;
+	tls_prot.inuse_idx = 0;
+	tls_prot.memory_allocated = &tls_memory_allocated;
+	tls_prot.orphan_count = &tls_orphan_count;
+	tls_prot.sockets_allocated = &tls_sockets_allocated;
+	percpu_counter_init(&tls_orphan_count, 0, GFP_KERNEL);
+	percpu_counter_init(&tls_sockets_allocated, 0, GFP_KERNEL);
+
+	ref_unix_connect = tls_prot.connect;
+	tls_prot.connect = tls_unix_connect;
+
+	ref_unix_disconnect = tls_prot.disconnect;
+	tls_prot.disconnect = tls_unix_disconnect;
+
+	ref_unix_shutdown = tls_prot.shutdown;
+	tls_prot.shutdown = tls_unix_shutdown;
+
+	ref_unix_recvmsg = tls_prot.recvmsg;
+	tls_prot.recvmsg = tls_unix_recvmsg;
+
+	ref_unix_sendmsg = tls_prot.sendmsg;
+	tls_prot.sendmsg = tls_unix_sendmsg;
+
+	ref_unix_close = tls_prot.close;
+	tls_prot.close = tls_unix_close;
+
+	ref_unix_init_sock = tls_prot.init;
+	tls_prot.init = tls_unix_init_sock;
+
+	ref_unix_destroy_sock = tls_prot.destroy;
+	tls_prot.destroy = tls_unix_destroy_sock;
+
+	tls_proto_ops = *(sock->ops);
+	
+	ref_unix_listen = tls_proto_ops.listen;
+	ref_unix_bind = tls_proto_ops.bind;
+	ref_unix_accept = tls_proto_ops.accept;
+	tls_proto_ops.listen = tls_unix_listen;
+	tls_proto_ops.bind = tls_unix_bind;
+	tls_proto_ops.accept = tls_unix_accept;
+	tls_proto_ops.owner = THIS_MODULE;
+
+	ref_unix_setsockopt = tls_prot.setsockopt;
+	ref_unix_getsockopt = tls_prot.getsockopt;
+
+	tls_prot.setsockopt = tls_unix_setsockopt;
+	tls_prot.getsockopt = tls_unix_getsockopt;
+
+	sock_release(sock);
+
+	printk(KERN_INFO "TLS protocol initialized\n");
+	return 0;
+}
+
+int set_tls_prot_tcp(void) {
 
 	unsigned long kallsyms_err;
 
@@ -103,31 +175,31 @@ int set_tls_prot(void) {
 	tcpv6_prot = *(struct proto *)kallsyms_err;
 
 	ref_tcp_v4_connect = tls_prot.connect;
-	tls_prot.connect = tls_v4_connect;
+	tls_prot.connect = tls_tcp_v4_connect;
 
 	ref_tcp_v6_connect = tcpv6_prot.connect;
 	//tcpv6_prot.connect = tls_v6_connect; /* wtf is this here? */
 
 	ref_tcp_disconnect = tls_prot.disconnect;
-	tls_prot.disconnect = tls_disconnect;
+	tls_prot.disconnect = tls_tcp_disconnect;
 
 	ref_tcp_shutdown = tls_prot.shutdown;
-	tls_prot.shutdown = tls_shutdown;
+	tls_prot.shutdown = tls_tcp_shutdown;
 
 	ref_tcp_recvmsg = tls_prot.recvmsg;
-	tls_prot.recvmsg = tls_recvmsg;
+	tls_prot.recvmsg = tls_tcp_recvmsg;
 
 	ref_tcp_sendmsg = tls_prot.sendmsg;
-	tls_prot.sendmsg = tls_sendmsg;
+	tls_prot.sendmsg = tls_tcp_sendmsg;
 
 	ref_tcp_close = tls_prot.close;
-	tls_prot.close = tls_close;
+	tls_prot.close = tls_tcp_close;
 
 	ref_tcp_v4_init_sock = tls_prot.init;
-	tls_prot.init = tls_v4_init_sock;
+	tls_prot.init = tls_tcp_v4_init_sock;
 
 	ref_tcp_v4_destroy_sock = tls_prot.destroy;
-	tls_prot.destroy = tls_v4_destroy_sock;
+	tls_prot.destroy = tls_tcp_v4_destroy_sock;
 
 	tls_proto_ops = inet_stream_ops;
 	
@@ -142,8 +214,8 @@ int set_tls_prot(void) {
 	ref_tcp_setsockopt = tcp_prot.setsockopt;
 	ref_tcp_getsockopt = tcp_prot.getsockopt;
 
-	tls_prot.setsockopt = tls_setsockopt;
-	tls_prot.getsockopt = tls_getsockopt;
+	tls_prot.setsockopt = tls_tcp_setsockopt;
+	tls_prot.getsockopt = tls_tcp_getsockopt;
 	printk(KERN_INFO "TLS protocol initialized\n");
 	return 0;
 }
@@ -160,7 +232,7 @@ static int __init tls_init(void) {
 	tls_setup();
 
 	/* Establish and register the tls_prot structure */
-	err = set_tls_prot();
+	err = set_tls_prot_tcp();
 	if (err != 0){
 		goto out;
 	}
