@@ -239,8 +239,8 @@ int tls_v4_init_sock(struct sock *sk) {
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
-	sock_ext_data->daemon_id = DAEMON_START_PORT;
-	//sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
+	//sock_ext_data->daemon_id = DAEMON_START_PORT;
+	sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
 	//printk(KERN_INFO "Assigning new socket to daemon %d\n", sock_ext_data->daemon_id);
 	balancer = (balancer+1) % nr_cpu_ids;
 	init_completion(&sock_ext_data->sock_event);
@@ -260,7 +260,7 @@ void tls_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data == NULL) {
 		return;
 	}
-	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
+	//send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
@@ -518,7 +518,7 @@ int is_valid_host_string(char* str, int len) {
 void report_return(unsigned long key, int ret) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
-	BUG_ON(sock_ext_data == NULL);
+	//BUG_ON(sock_ext_data == NULL);
 	if (sock_ext_data == NULL) {
 		return;
 	}
@@ -530,7 +530,10 @@ void report_return(unsigned long key, int ret) {
 void report_data_return(unsigned long key, char* data, unsigned int len) {
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data((struct sock*)key);
-	BUG_ON(sock_ext_data == NULL);
+	//BUG_ON(sock_ext_data == NULL);
+	if (sock_ext_data == NULL) {
+		return;
+	}
 	sock_ext_data->data = kmalloc(len, GFP_ATOMIC);
 	if (sock_ext_data->data == NULL) {
 		printk(KERN_ALERT "failed to create memory for getsockopt return\n");
