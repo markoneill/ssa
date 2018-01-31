@@ -46,6 +46,9 @@ void (*ref_tcp_close)(struct sock *sk, long timeout);
 int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
+typedef int (*tcp_setsockopt_t)(struct sock*, int, int, char __user*, unsigned int);
+tcp_setsockopt_t orig_tcp_setsockopt = NULL;
+
 /* inet stream reference functions */
 int (*ref_inet_listen)(struct socket *sock, int backlog);
 int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
@@ -201,6 +204,10 @@ static int __init tls_init(void) {
 
 	/* Register the tls_stream_protosw */
 
+	/* Register the setsockopt hook */
+	orig_tcp_setsockopt = tcp_prot.setsockopt;
+	tcp_prot.setsockopt = hook_tcp_setsockopt;
+
 	printk(KERN_INFO "TLS Module loaded and tls_prot registered\n");
 	return 0;
 
@@ -214,6 +221,11 @@ out_proto_unregister:
 static void __exit tls_exit(void) {
 	percpu_counter_destroy(&tls_orphan_count);
 	percpu_counter_destroy(&tls_sockets_allocated);
+
+	/* Unregister the tcp hook */
+	if (orig_tcp_setsockopt != NULL) {
+		tcp_prot.setsockopt = orig_tcp_setsockopt;
+	}
 
 	/* Unregister the protocols and structs in the reverse order they were registered */
 	inet_del_protocol(&ipprot, IPPROTO_TLS);
