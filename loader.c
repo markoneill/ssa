@@ -46,8 +46,7 @@ void (*ref_tcp_close)(struct sock *sk, long timeout);
 int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
 int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
-typedef int (*tcp_setsockopt_t)(struct sock*, int, int, char __user*, unsigned int);
-tcp_setsockopt_t orig_tcp_setsockopt = NULL;
+int (*orig_tcp_setsockopt)(struct sock*, int, int, char __user*, unsigned int) = NULL;
 
 /* Original Unix domain reference functions */
 int (*ref_unix_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);

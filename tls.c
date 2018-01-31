@@ -34,6 +34,8 @@
 #define TLS_UPGRADE_PATH	"\0tls_upgrade" 
 #define TLS_UPGRADE_PATH_LEN	sizeof(TLS_UPGRADE_PATH)
 
+#define MAX_CON_INFO_SIZE	64
+
 static DEFINE_HASHTABLE(tls_sock_ext_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_ext_lock);
 
@@ -73,6 +75,8 @@ extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int add
 extern int (*ref_unix_listen)(struct socket *sock, int backlog);
 extern int (*ref_unix_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
 extern int (*ref_unix_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
+
+extern int (*orig_tcp_setsockopt)(struct sock*, int, int, char __user*, unsigned int);
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
 int get_id(struct sock* sk, char __user *optval, int* __user optlen);
@@ -606,7 +610,7 @@ int recv_con(struct socket* sock) {
 	return err;
 }
 
-int sockdup2(int oldfd, socket* sock) {
+int sockdup2(int oldfd, struct socket* sock) {
 	struct files_struct* files;
 	struct file* filp;
 
@@ -740,14 +744,14 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 // hooks tcp's setsockopt so that we can find our special options
 int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* optval, unsigned int optlen) {
 	int fd;
-	//TODO get rid of printfs
-	printk(KERN_INFO "Hook called\n");
-	char* con_info;
+	char con_info[MAX_CON_INFO_SIZE];
 	int con_info_size;
 	int is_accepting;
 	int error;
 	struct socket* new_sock;
 	
+	//TODO get rid of printfs
+	printk(KERN_INFO "Hook called\n");
 	// first check if it is our special opt
 	// otherwise pass it on
 	if (level == SOL_TCP && optname == TCP_UPGRADE_TLS) {
@@ -779,7 +783,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 		// get tls sock id
 		
 		// create the correct message to send
-		con_info_size = snprintf(con_info, con_info_size, "%d:%lu", optval, (void*)new_sock);
+		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock);
 		// gift the original connection
 		// and recv for a completion
 		write_fd(fd, con_info, con_info_size);

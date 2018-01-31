@@ -74,6 +74,7 @@ void report_data_return(unsigned long key, char* data, unsigned int len);
 
 /* File Descriptor passing functions */
 int recv_con(struct socket* sock);
+int sockdup2(int oldfd, struct socket* sock);
 int getsk_fd(struct sock* sk);
 ssize_t write_fd(int fd_gift, char* buf, int buf_sz);
 int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* optval, unsigned int optlen);
