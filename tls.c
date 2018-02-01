@@ -783,7 +783,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 		// get tls sock id
 		
 		// create the correct message to send
-		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock);
+		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock->sk);
 		// gift the original connection
 		// and recv for a completion
 		write_fd(fd, con_info, con_info_size);
