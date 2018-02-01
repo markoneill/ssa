@@ -50,7 +50,6 @@ int (*orig_tcp_setsockopt)(struct sock*, int, int, char __user*, unsigned int) =
 
 /* Original Unix domain reference functions */
 int (*ref_unix_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-int (*ref_unix_disconnect)(struct sock *sk, int flags);
 void (*ref_unix_shutdown)(struct sock *sk, int how);
 int (*ref_unix_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
                         int flags, int *addr_len);
@@ -104,9 +103,6 @@ int set_tls_prot_unix(void) {
 
 	ref_unix_connect = tls_prot.connect;
 	tls_prot.connect = tls_unix_connect;
-
-	ref_unix_disconnect = tls_prot.disconnect;
-	tls_prot.disconnect = tls_unix_disconnect;
 
 	ref_unix_shutdown = tls_prot.shutdown;
 	tls_prot.shutdown = tls_unix_shutdown;
@@ -231,7 +227,8 @@ static int __init tls_init(void) {
 	tls_setup();
 
 	/* Establish and register the tls_prot structure */
-	err = set_tls_prot_tcp();
+	//err = set_tls_prot_tcp();
+	err = set_tls_prot_unix();
 	if (err != 0){
 		goto out;
 	}

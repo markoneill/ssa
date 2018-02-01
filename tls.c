@@ -56,7 +56,6 @@ extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char _
 
 /* Original Unix domain reference functions */
 extern int (*ref_unix_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-extern int (*ref_unix_disconnect)(struct sock *sk, int flags);
 extern void (*ref_unix_shutdown)(struct sock *sk, int how);
 extern int (*ref_unix_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
                         int flags, int *addr_len);
@@ -865,10 +864,6 @@ int tls_unix_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
 	return 0;
 }
 
-int tls_unix_disconnect(struct sock *sk, int flags) {
-	return (*ref_unix_disconnect)(sk, flags);
-}
-
 void tls_unix_shutdown(struct sock *sk, int how) {
 	return (*ref_unix_shutdown)(sk, how);
 }
@@ -905,12 +900,14 @@ int tls_unix_init_sock(struct sock *sk) {
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
-	ret = (*ref_unix_init_sock)(sk);
+	if (ref_unix_init_sock != NULL) {
+		(*ref_unix_init_sock)(sk);
+	}
 
 	send_socket_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking return values here because init_sock always returns 0 */
-	return ret;
+	return 0;
 }
 
 void tls_unix_destroy_sock(struct sock* sk) {
@@ -927,12 +924,17 @@ void tls_unix_destroy_sock(struct sock* sk) {
 	hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
 	spin_unlock(&tls_sock_ext_lock);
 	kfree(sock_ext_data);
-	(*ref_unix_destroy_sock)(sk);
+	if (ref_unix_destroy_sock != NULL) {
+		(*ref_unix_destroy_sock)(sk);
+	}
 	return;
 }
 
 void tls_unix_close(struct sock *sk, long timeout) {
-	(*ref_unix_close)(sk, timeout);
+	if (ref_unix_close != NULL) {
+		(*ref_unix_close)(sk, timeout);
+	}
+	return;
 }
 
 int tls_unix_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
