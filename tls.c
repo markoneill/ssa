@@ -4,6 +4,7 @@
  */
 
 #include <net/inet_sock.h>
+#include <net/af_unix.h>
 #include <linux/un.h>
 #include <linux/net.h>
 #include <linux/ctype.h>
@@ -54,28 +55,21 @@ extern int (*ref_tcp_setsockopt)(struct sock *sk, int level, int optname, char _
 extern int (*ref_tcp_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
 
 /* Original Unix domain reference functions */
-extern int (*ref_unix_connect)(struct sock *sk, struct sockaddr *uaddr, int addr_len);
-extern int (*ref_unix_disconnect)(struct sock *sk, int flags);
-extern void (*ref_unix_shutdown)(struct sock *sk, int how);
-extern int (*ef_unix_recvmsg)(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
-                        int flags, int *addr_len);
-extern int (*ref_unix_sendmsg)(struct sock *sk, struct msghdr *msg, size_t size);
 extern int (*ref_unix_init_sock)(struct sock *sk);
-extern void (*ref_unix_destroy_sock)(struct sock *sk);
-extern void (*ref_unix_close)(struct sock *sk, long timeout);
-extern int (*ref_unix_setsockopt)(struct sock *sk, int level, int optname, char __user *optval, unsigned int len);
-extern int (*ref_unix_getsockopt)(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen);
+extern int (*ref_unix_release)(struct socket* sock);
+extern int (*ref_unix_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
+extern int (*ref_unix_connect)(struct socket *sock, struct sockaddr *uaddr, int addr_len, int flags);
+extern int (*ref_unix_listen)(struct socket *sock, int backlog);
+extern int (*ref_unix_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
+extern int (*ref_unix_setsockopt)(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen);
+extern int (*ref_unix_getsockopt)(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen);
 
 /* inet stream reference functions */
 extern int (*ref_inet_listen)(struct socket *sock, int backlog);
 extern int (*ref_inet_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
 extern int (*ref_inet_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
 
-/* unix stream reference functions */
-extern int (*ref_unix_listen)(struct socket *sock, int backlog);
-extern int (*ref_unix_accept)(struct socket *sock, struct socket *newsock, int flags, bool kern);
-extern int (*ref_unix_bind)(struct socket *sock, struct sockaddr *uaddr, int addr_len);
-
+/* Auxillary support reference functions */
 extern int (*orig_tcp_setsockopt)(struct sock*, int, int, char __user*, unsigned int);
 
 int get_hostname(struct sock* sk, char __user *optval, int* __user len);
@@ -85,8 +79,11 @@ int is_valid_host_string(char* str, int len);
 
 unsigned int balancer = 0;
 
+static int common_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len, typeof(ref_tcp_setsockopt) orig_func);
+static int common_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen, typeof(ref_tcp_getsockopt) orig_func);
+
 /* Original AF Inet reference functions */
-int tls_tcp_inet_listen(struct socket *sock, int backlog) {
+int tls_inet_listen(struct socket *sock, int backlog) {
 	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
         struct sockaddr_in int_addr = {
                 .sin_family = AF_INET,
@@ -124,11 +121,11 @@ int tls_tcp_inet_listen(struct socket *sock, int backlog) {
 	return (*ref_inet_listen)(sock, backlog);
 }
 
-int tls_tcp_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
+int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
 	return (*ref_inet_accept)(sock, newsock, flags, kern);
 }
 
-int tls_tcp_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	int ret;
 	tls_sock_ext_data_t* sock_ext_data;
 	/* We disregard the address the application wants to bind to in favor
@@ -276,8 +273,8 @@ int tls_tcp_v4_init_sock(struct sock *sk) {
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
-	//sock_ext_data->daemon_id = DAEMON_START_PORT;
-	sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
+	sock_ext_data->daemon_id = DAEMON_START_PORT;
+	//sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
 	//printk(KERN_INFO "Assigning new socket to daemon %d\n", sock_ext_data->daemon_id);
 	balancer = (balancer+1) % nr_cpu_ids;
 	init_completion(&sock_ext_data->sock_event);
@@ -297,7 +294,7 @@ void tls_tcp_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data == NULL) {
 		return;
 	}
-	//send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
+	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
@@ -340,7 +337,12 @@ void tls_cleanup() {
         spin_lock(&tls_sock_ext_lock);
         hash_for_each_safe(tls_sock_ext_data_table, bkt, tmpptr, it, hash) {
 		//(*ref_tcp_close)(it->sk, 0);
-		(*ref_tcp_v4_destroy_sock)(it->sk);
+		if (it->int_addr.sa_family == AF_INET) {
+			(*ref_tcp_v4_destroy_sock)(it->sk);
+		}
+		else {
+			(*ref_unix_release)((it->sk)->sk_socket);
+		}
                 hash_del(&it->hash);
                 kfree(it->hostname);
 		kfree(it);
@@ -353,6 +355,10 @@ void tls_cleanup() {
 }
 
 int tls_tcp_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
+	return common_setsockopt(sk, level, optname, optval, len, ref_tcp_setsockopt);
+}
+
+int common_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len, typeof(ref_tcp_setsockopt) orig_func) {
 	int ret;
 	char* koptval;
 	tls_sock_ext_data_t* sock_ext_data;
@@ -417,13 +423,20 @@ int tls_tcp_setsockopt(struct sock *sk, int level, int optname, char __user *opt
 			break;
 		default:
 			/* Now we do the same thing to the application socket, if applicable */
-			return ref_tcp_setsockopt(sk, level, optname, optval, len);
+			if (orig_func) {
+				return orig_func(sk, level, optname, optval, len);
+			}
+			return -EOPNOTSUPP;
 			break;
 	}
 	return 0;
 }
 
 int tls_tcp_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen) {
+	return common_getsockopt(sk, level, optname, optval, optlen, ref_tcp_getsockopt);
+}
+
+int common_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen, typeof(ref_tcp_getsockopt) orig_func) {
 	int len;
 	tls_sock_ext_data_t* sock_ext_data;
 	sock_ext_data = tls_sock_ext_get_data(sk);
@@ -468,11 +481,13 @@ int tls_tcp_getsockopt(struct sock *sk, int level, int optname, char __user *opt
 			}
 			break;
 		default:
-			return ref_tcp_getsockopt(sk, level, optname, optval, optlen);
+			if (orig_func) {
+				return orig_func(sk, level, optname, optval, optlen);
+			}
+			return -EOPNOTSUPP;
 	}
 	return 0;
 }
-
 
 int set_hostname(tls_sock_ext_data_t* sock_ext_data, char* optval, unsigned int len) {
 	if (sock_ext_data->is_connected == 1) {
@@ -751,7 +766,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	struct socket* new_sock;
 	
 	//TODO get rid of printfs
-	printk(KERN_INFO "Hook called\n");
+	//printk(KERN_INFO "Hook called\n");
 	// first check if it is our special opt
 	// otherwise pass it on
 	if (level == SOL_TCP && optname == TCP_UPGRADE_TLS) {
@@ -800,72 +815,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 }
 
 /* TLS override functions for Unix */
-int tls_unix_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len) {
-	int ret;
-	/*struct sockaddr_in* uaddr_in;*/
-	struct sockaddr_in reroute_addr = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
-	};
-
-	struct sockaddr_un int_addr = {
-		.sun_family = AF_UNIX
-	};
-
-	/* Save original destination address information */
-	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
-	sock_ext_data->rem_addr = (struct sockaddr)(*uaddr);
-	sock_ext_data->rem_addrlen = addr_len;
-
-	/* Pre-emptively bind the source port so we can register it before remote
-	 * connection. We only do this if the application hasn't explicitly called
-	 * bind already */
-	if (sock_ext_data->has_bound == 0) {
-		release_sock(sk);
-		(*ref_unix_bind)(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(sa_family_t));
-		//kernel_bind(sk->sk_socket, (struct sockaddr*)&int_addr, sizeof(int_addr));
-		lock_sock(sk);
-		sock_ext_data->int_addrlen = sizeof(sa_family_t) + 6;
-		memcpy(&sock_ext_data->int_addr+(sizeof(sa_family_t)), &int_addr, sock_ext_data->int_addrlen);
-		sock_ext_data->has_bound = 1;
-	}
-
-	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr, sock_ext_data->daemon_id);
-	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
-		/* Let's lie to the application if the daemon isn't responding */
-		return -EHOSTUNREACH;
-	}
-	if (sock_ext_data->response != 0) {
-		return sock_ext_data->response;
-	}
-	reroute_addr.sin_port = htons(sock_ext_data->daemon_id);
-	ret = (*ref_unix_connect)(sk, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr));
-	if (ret != 0) {
-		return ret;
-	}
-	sock_ext_data->is_connected = 1;
-	return 0;
-}
-
-int tls_unix_disconnect(struct sock *sk, int flags) {
-	return (*ref_unix_disconnect)(sk, flags);
-}
-
-void tls_unix_shutdown(struct sock *sk, int how) {
-	return (*ref_unix_shutdown)(sk, how);
-}
-
-int tls_unix_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
-		int flags, int *addr_len) {
-	return (*ref_unix_recvmsg)(sk, msg, len, nonblock, flags, addr_len);
-}
-
-int tls_unix_sendmsg(struct sock *sk, struct msghdr *msg, size_t size) {
-	return (*ref_unix_sendmsg)(sk, msg, size);
-}
-
 int tls_unix_init_sock(struct sock *sk) {
-	int ret;
 	tls_sock_ext_data_t* sock_ext_data;
 	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t),GFP_ATOMIC)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_unix_init_sock\n");
@@ -874,7 +824,7 @@ int tls_unix_init_sock(struct sock *sk) {
 
 	memset(sock_ext_data, 0, sizeof(tls_sock_ext_data_t));
 
-	((struct sockaddr_un*)&sock_ext_data->int_addr)->sin_family = AF_UNIX;
+	((struct sockaddr_un*)&sock_ext_data->int_addr)->sun_family = AF_UNIX;
 
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
@@ -887,33 +837,155 @@ int tls_unix_init_sock(struct sock *sk) {
 	spin_lock(&tls_sock_ext_lock);
 	hash_add(tls_sock_ext_data_table, &sock_ext_data->hash, sock_ext_data->key);
 	spin_unlock(&tls_sock_ext_lock);
-	ret = (*ref_tcp_v4_init_sock)(sk);
+	/*if (ref_unix_init_sock != NULL) {
+		(*ref_unix_init_sock)(sk);
+	}*/
 
 	send_socket_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking return values here because init_sock always returns 0 */
-	return ret;
+	return 0;
 }
 
-void tls_unix_destroy_sock(struct sock* sk) {
-}
-
-void tls_unix_close(struct sock *sk, long timeout) {
-}
-
-int tls_unix_setsockopt(struct sock *sk, int level, int optname, char __user *optval, unsigned int len) {
-}
-
-int tls_unix_getsockopt(struct sock *sk, int level, int optname, char __user *optval, int __user *optlen) {
-
-}
-
-int tls_unix_listen(struct socket *sock, int backlog) {
-}
-
-int tls_unix_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
+int tls_unix_release(struct socket* sock) {
+	struct sock* sk = sock->sk;
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
+	if (sock_ext_data == NULL) {
+		return 0;
+	}
+	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
+	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
+	if (sock_ext_data->hostname != NULL) {
+		kfree(sock_ext_data->hostname);
+	}
+	spin_lock(&tls_sock_ext_lock);
+	hash_del(&sock_ext_data->hash); /* remove from ext_data_Table */
+	spin_unlock(&tls_sock_ext_lock);
+	kfree(sock_ext_data);
+	return (*ref_unix_release)(sock);
 }
 
 int tls_unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
+	int ret;
+	tls_sock_ext_data_t* sock_ext_data;
+	/* We disregard the address the application wants to bind to in favor
+	 * of one assigned by the system (using sin_port = 0 on localhost),
+	 * so that we can have the TLS wrapper daemon bind to the actual one */
+
+	sock_ext_data = tls_sock_ext_get_data(sock->sk);
+	ret = (*ref_unix_bind)(sock, &sock_ext_data->int_addr, sizeof(sa_family_t));
+
+	/* We only want to continue if the internal socket bind succeeds */
+	if (ret != 0) {
+		printk(KERN_ALERT "Internal bind failed\n");
+		return ret;
+	}
+
+	/* We can use the abstract name now because unix_bind will have set
+	 * it for us */
+	memcpy(&sock_ext_data->int_addr, unix_sk(sock->sk)->addr->name,
+		       	sizeof(sa_family_t) + 6);
+
+	send_bind_notification((unsigned long)sock->sk, &sock_ext_data->int_addr, (struct sockaddr*)uaddr, sock_ext_data->daemon_id);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EADDRINUSE;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
+	sock_ext_data->has_bound = 1;
+	sock_ext_data->int_addrlen = sizeof(sa_family_t) + 6;
+	sock_ext_data->ext_addr = *uaddr;
+	sock_ext_data->ext_addrlen = addr_len;
+	return 0;
+}
+
+int tls_unix_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, int flags) {
+	int ret;
+	int reroute_addrlen;
+	struct sockaddr_un reroute_addr = {
+		.sun_family = AF_UNIX,
+	};
+
+	struct sockaddr_un int_addr = {
+		.sun_family = AF_UNIX
+	};
+
+	struct sock* sk = sock->sk;
+	/* Save original destination address information */
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sk);
+	sock_ext_data->rem_addr = (struct sockaddr)(*uaddr);
+	sock_ext_data->rem_addrlen = addr_len;
+
+	/* Pre-emptively bind the source port so we can register it before remote
+	 * connection. We only do this if the application hasn't explicitly called
+	 * bind already */
+	if (sock_ext_data->has_bound == 0) {
+		(*ref_unix_bind)(sock, (struct sockaddr*)&int_addr, sizeof(sa_family_t));
+		sock_ext_data->int_addrlen = sizeof(sa_family_t) + 6;
+		memcpy(&sock_ext_data->int_addr, unix_sk(sk)->addr->name, 
+				sock_ext_data->int_addrlen);
+		sock_ext_data->has_bound = 1;
+	}
+
+	send_connect_notification((unsigned long)sk, &sock_ext_data->int_addr, uaddr, sock_ext_data->daemon_id);
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EHOSTUNREACH;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
+
+	reroute_addrlen = sprintf(reroute_addr.sun_path+1, "%d", sock_ext_data->daemon_id) + 1 + sizeof(sa_family_t);
+	printk(KERN_INFO "sock is redirected to %s\n", reroute_addr.sun_path+1);
+	ret = (*ref_unix_connect)(sock, ((struct sockaddr*)&reroute_addr), reroute_addrlen, flags);
+	if (ret != 0) {
+		return ret;
+	}
+	sock_ext_data->is_connected = 1;
+	return 0;
+}
+
+int tls_unix_listen(struct socket *sock, int backlog) {
+	tls_sock_ext_data_t* sock_ext_data = tls_sock_ext_get_data(sock->sk);
+        struct sockaddr_un int_addr = {
+                .sun_family = AF_INET,
+        };
+
+	if (sock_ext_data->has_bound == 0) {
+		/* Invoke autobind */
+		(*ref_unix_bind)(sock, (struct sockaddr*)&int_addr, sizeof(sa_family_t));
+		sock_ext_data->int_addrlen = sizeof(sa_family_t) + 6;
+		memcpy(&sock_ext_data->int_addr, unix_sk(sock->sk)->addr->name, 
+				sock_ext_data->int_addrlen);
+		sock_ext_data->has_bound = 1;
+	}
+	send_listen_notification((unsigned long)sock->sk, 
+			(struct sockaddr*)&sock_ext_data->int_addr,
+		        (struct sockaddr*)&sock_ext_data->ext_addr,
+			sock_ext_data->daemon_id);
+
+	if (wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EADDRINUSE;
+	}
+	if (sock_ext_data->response != 0) {
+		return sock_ext_data->response;
+	}
+	return (*ref_unix_listen)(sock, backlog);
+}
+
+int tls_unix_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
+	return (*ref_unix_accept)(sock, newsock, flags, kern);
+}
+
+int tls_unix_setsockopt(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen) {
+	return common_setsockopt(sock->sk, level, optname, optval, optlen, NULL);
+}
+
+int tls_unix_getsockopt(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen) {
+	return common_getsockopt(sock->sk, level, optname, optval, optlen, NULL);
 }
 
