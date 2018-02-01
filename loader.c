@@ -208,8 +208,8 @@ static int __init tls_init(void) {
 	tls_setup();
 
 	/* Establish and register the tls_prot structure */
-	//err = set_tls_prot_tcp();
-	err = set_tls_prot_unix();
+	err = set_tls_prot_tcp();
+	//err = set_tls_prot_unix();
 	if (err != 0){
 		goto out;
 	}

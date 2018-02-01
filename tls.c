@@ -273,8 +273,8 @@ int tls_tcp_v4_init_sock(struct sock *sk) {
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
-	//sock_ext_data->daemon_id = DAEMON_START_PORT;
-	sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
+	sock_ext_data->daemon_id = DAEMON_START_PORT;
+	//sock_ext_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
 	//printk(KERN_INFO "Assigning new socket to daemon %d\n", sock_ext_data->daemon_id);
 	balancer = (balancer+1) % nr_cpu_ids;
 	init_completion(&sock_ext_data->sock_event);
@@ -294,7 +294,7 @@ void tls_tcp_v4_destroy_sock(struct sock* sk) {
 	if (sock_ext_data == NULL) {
 		return;
 	}
-	//send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
+	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
@@ -766,7 +766,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	struct socket* new_sock;
 	
 	//TODO get rid of printfs
-	printk(KERN_INFO "Hook called\n");
+	//printk(KERN_INFO "Hook called\n");
 	// first check if it is our special opt
 	// otherwise pass it on
 	if (level == SOL_TCP && optname == TCP_UPGRADE_TLS) {
@@ -853,7 +853,7 @@ int tls_unix_release(struct socket* sock) {
 	if (sock_ext_data == NULL) {
 		return 0;
 	}
-	//send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
+	send_close_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	//wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_ext_data->hostname != NULL) {
 		kfree(sock_ext_data->hostname);
