@@ -6,25 +6,26 @@
 #include <net/inet_sock.h>
 #include <net/af_unix.h>
 #include <linux/un.h>
+#include <linux/in.h>
 #include <linux/net.h>
 #include <linux/ctype.h>
 #include <linux/completion.h>
 #include <linux/cpumask.h>
 
 #include <net/sock.h>
-#include <linux/un.h>
 #include <linux/string.h>
 #include <uapi/linux/uio.h>
 #include <linux/fdtable.h>
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/spinlock.h>
+#include <linux/err.h>
 
 #include "socktls.h"
 #include "netlink.h"
 #include "tls.h"
 
-#define RESPONSE_TIMEOUT	HZ*100
+#define RESPONSE_TIMEOUT	HZ*10
 #define HASH_TABLE_BITSIZE	9
 #define DAEMON_START_PORT	8443
 
@@ -259,6 +260,9 @@ void tls_tcp_shutdown(struct sock *sk, int how){
 int tls_tcp_v4_init_sock(struct sock *sk) {
 	int ret;
 	tls_sock_ext_data_t* sock_ext_data;
+
+	printk(KERN_INFO "v4 init sock\n");
+
 	if ((sock_ext_data = kmalloc(sizeof(tls_sock_ext_data_t),GFP_ATOMIC)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_v4_init_sock\n");
 		return -1;
@@ -612,9 +616,7 @@ int recv_con(struct socket* sock) {
 	iov.iov_base = buf;
 	iov.iov_len = sizeof(buf);
 
-	printk(KERN_ERR "1\n");
 	err = kernel_recvmsg(sock, &msg, &iov, 1, iov.iov_len, 0);
-	printk(KERN_ERR "2\n");
 
 	if (err == -1) {
 		printk(KERN_ERR "recvmsg error\n");
@@ -628,20 +630,39 @@ int recv_con(struct socket* sock) {
 int sockdup2(int oldfd, struct socket* sock) {
 	struct files_struct* files;
 	struct file* filp;
+	struct file* newfile;
 
 	files = current->files;
+
+	if (sock->file == NULL) {
+		// create a file for the socket
+		//TODO pass along nonblock as a flag if we are nonblocking
+		newfile = sock_alloc_file(sock, 0, NULL);
+		if (IS_ERR(newfile)) {
+			printk(KERN_ERR "BAD NEWS BEARS couldn't give sock a file\n");
+			return -1;
+		}
+	}
+
+	printk(KERN_ERR "New shiny = %p\n", sock->file);
 
 	// lock the files
 	spin_lock(&files->file_lock);
 
 	// grab the old filp
 	filp = files->fdt->fd[oldfd];
+
+	printk(KERN_ERR "Old fp = %p\n", files->fdt->fd[oldfd]);
 	
 	// NULL out oldfd
 	files->fdt->fd[oldfd] = NULL;
 	
+	printk(KERN_ERR "Nulled out = %p\n", files->fdt->fd[oldfd]);
+	
 	// replace it with the new
 	fd_install(oldfd, sock->file); 
+
+	printk(KERN_ERR "New shiny? = %p\n", files->fdt->fd[oldfd]);
 
 	// unlock
 	spin_unlock(&files->file_lock);
@@ -680,6 +701,7 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 	int error;
 	struct socket* sock;
 	struct sockaddr_un addr;
+	int addr_len;
     	struct sockaddr_un self;
 
 	struct msghdr msg = {0};
@@ -702,8 +724,11 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	memcpy(addr.sun_path, TLS_UPGRADE_PATH, TLS_UPGRADE_PATH_LEN);
+	addr_len = TLS_UPGRADE_PATH_LEN + sizeof(sa_family_t);
+
+	printk(KERN_INFO "Connecting to daemon\n");
 	
-	error = kernel_connect(sock, (struct sockaddr*)&addr, sizeof(addr), 0);
+	error = kernel_connect(sock, (struct sockaddr*)&addr, addr_len, 0);
 	if (error < 0) {
 		printk(KERN_ERR "connect error\n");
 		sock_release(sock);
@@ -732,6 +757,8 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 	
 	// before we send the message, we need to bind so they can send back something as a confirmation
 	self.sun_family = AF_UNIX;
+	
+	printk(KERN_INFO "Binding for call back\n");
 
 	// autobind only is invoked if bind size == 2 == sizeof(sa_family_t)
 	if (kernel_bind(sock, (struct sockaddr*)&self, sizeof(sa_family_t)) == -1) {
@@ -740,6 +767,7 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 		return -1;
 	}
 
+	printk(KERN_INFO "gifting fd\n");
 	error = kernel_sendmsg(sock, &msg, &iov, 1, iov.iov_len);
 	if (error == -1) {
 		printk(KERN_ERR "sendmsg error\n");
@@ -764,6 +792,9 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	int is_accepting;
 	int error;
 	struct socket* new_sock;
+	struct sockaddr_in daemon_addr;
+	socket_state state;
+
 	
 	//TODO get rid of printfs
 	//printk(KERN_INFO "Hook called\n");
@@ -785,23 +816,47 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 			printk(KERN_ERR "BadBadNotGood Couldn't find sk in fd\n");
 			return -1;
 		}
-		//TODO
-		// on this tcp sock we need to know if this is a connection, unconnected, listening, accepted
-		// make tls sock
 		
-		error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TLS, &new_sock);
-		if (error < 0) {
+		printk(KERN_INFO "Making replacement connection\n");
+		// make tls sock
+		error = sock_create_kern(current->nsproxy->net_ns, PF_INET, SOCK_STREAM, IPPROTO_TLS, &new_sock);
+		if (error != 0) {
 			printk(KERN_ERR "Could not create TLS socket :(\n");
 			return -1;
 		}
+		printk(KERN_INFO "Made replacement connection\n");
 		
-		// get tls sock id
+		// on this tcp sock we need to know if this is a connection, unconnected, listening, accepted
+		// check if it is already connected, if so connect it
+		state = sk->sk_socket->state;
+
+		if (is_accepting || state == SS_CONNECTED || state == SS_CONNECTING) {
+			// connect the socket
+			// to localhost 8443
+			// if we direct connect it is cool
+			daemon_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+			daemon_addr.sin_family = AF_INET;
+			daemon_addr.sin_port = htons(8443);
+		
+			printk(KERN_INFO "Connecting replacement connection\n");
+			error = kernel_connect(new_sock, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr), 0);
+			if (error < 0) {
+				printk(KERN_ERR "Error connecting to the daemon for the replacement connection\n");
+				sock_release(new_sock);
+				return -1;
+			}
+		}
 		
 		// create the correct message to send
 		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock->sk);
 		// gift the original connection
 		// and recv for a completion
-		write_fd(fd, con_info, con_info_size);
+		error = write_fd(fd, con_info, con_info_size);
+		if (error < 0) {
+			printk(KERN_ERR "Error sending the file descriptor to the daemon\n");
+			sock_release(new_sock);
+			return -1;
+		}
 		printk(KERN_INFO "Sent fd\n");
 		
 		// dup2 tls over fd
@@ -821,11 +876,11 @@ int tls_unix_init_sock(struct sock *sk) {
 		printk(KERN_ALERT "kmalloc failed in tls_unix_init_sock\n");
 		return -1;
 	}
-
+	
 	memset(sock_ext_data, 0, sizeof(tls_sock_ext_data_t));
-
+	
 	((struct sockaddr_un*)&sock_ext_data->int_addr)->sun_family = AF_UNIX;
-
+	
 	sock_ext_data->pid = current->pid;
 	sock_ext_data->sk = sk;
 	sock_ext_data->key = (unsigned long)sk;
@@ -840,7 +895,7 @@ int tls_unix_init_sock(struct sock *sk) {
 	/*if (ref_unix_init_sock != NULL) {
 		(*ref_unix_init_sock)(sk);
 	}*/
-
+	
 	send_socket_notification((unsigned long)sk, sock_ext_data->daemon_id);
 	wait_for_completion_timeout(&sock_ext_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking return values here because init_sock always returns 0 */
