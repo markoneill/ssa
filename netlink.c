@@ -2,7 +2,7 @@
 #include <net/genetlink.h>
 
 #include "netlink.h"
-#include "tls.h"
+#include "tls_common.h"
 
 int nl_fail(struct sk_buff* skb, struct genl_info* info);
 int daemon_cb(struct sk_buff* skb, struct genl_info* info);
