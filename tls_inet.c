@@ -7,6 +7,7 @@
 #include <net/tcp.h>
 #include <net/inet_common.h>
 #include <linux/cpumask.h>
+#include <linux/spinlock.h>
 #include "tls_inet.h"
 #include "tls_common.h"
 #include "netlink.h"
@@ -15,7 +16,8 @@ static atomic_long_t tls_memory_allocated;
 static struct percpu_counter tls_orphan_count;
 static struct percpu_counter tls_sockets_allocated;
 
-unsigned int balancer = 0;
+static unsigned int balancer = 0;
+static DEFINE_SPINLOCK(load_balance_lock);
 
 static struct proto_ops ref_inet_stream_ops;
 static struct proto ref_tcp_prot;
@@ -91,9 +93,12 @@ int tls_inet_init_sock(struct sock *sk) {
 	sock_data->sk = sk;
 	sock_data->key = (unsigned long)sk->sk_socket;
 	sock_data->daemon_id = DAEMON_START_PORT;
-	//sock_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
+
+	spin_lock(&load_balance_lock);
+	sock_data->daemon_id = DAEMON_START_PORT + balancer;
 	//printk(KERN_INFO "Assigning new socket to daemon %d\n", sock_data->daemon_id);
-	balancer = (balancer+1) % nr_cpu_ids;
+	balancer = (balancer+1) % NUM_DAEMONS;
+	spin_unlock(&load_balance_lock);
 	init_completion(&sock_data->sock_event);
 	put_tls_sock_data(sock_data->key, &sock_data->hash);
 	ret = ref_tcp_prot.init(sk);
@@ -110,7 +115,7 @@ int tls_inet_release(struct socket* sock) {
 		/* We're not treating this particular socket.*/
 		return ref_inet_stream_ops.release(sock);
 	}
-	send_close_notification((unsigned long)sock, sock_data->daemon_id);
+	//send_close_notification((unsigned long)sock, sock_data->daemon_id);
 	//wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT);
 	if (sock_data->hostname != NULL) {
 		kfree(sock_data->hostname);
