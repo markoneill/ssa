@@ -39,17 +39,22 @@
 #include <linux/cpumask.h>
 #include "tls_common.h"
 #include "tls_inet.h"
+#include "tls_unix.h"
 #include "tls_upgrade.h"
 #include "socktls.h"
 
 #define DRIVER_AUTHOR 	"Mark O'Neill <mark@markoneill.name> and Nick Bonner <j.nick.bonner@gmail.com>"
 #define DRIVER_DESC	"A loadable TLS module to give TLS functionality to the POSIX socket API"
 
+#define INET_MODE	0
+#define UNIX_MODE	1
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 
 /* The TLS protocol structures to be filled and registered */
+static int internal_transport_mode = INET_MODE;
 static struct proto tls_prot;
 static struct proto_ops tls_proto_ops;
 static struct net_protocol tls_protocol;
@@ -77,8 +82,12 @@ static int __init ssa_init(void) {
 	tls_setup();
 
 	/* Obtain referencess to desired TLS handling functions */
-	err = set_tls_prot_inet_stream(&tls_prot, &tls_proto_ops);
-	//err = set_tls_prot_unix();
+	if (internal_transport_mode == INET_MODE) {
+		err = set_tls_prot_inet_stream(&tls_prot, &tls_proto_ops);
+	}
+	else {
+		err = set_tls_prot_unix_stream(&tls_prot, &tls_proto_ops);
+	}
 	if (err != 0) {
 		goto out;
 	}
@@ -135,7 +144,9 @@ out_proto_unregister:
 
 static void __exit ssa_exit(void) {
 
-	inet_stream_cleanup();
+	if (internal_transport_mode == INET_MODE) {
+		inet_stream_cleanup();
+	}
 
 	/* Unregister the tcp hook */
 	if (orig_tcp_setsockopt != NULL) {
@@ -152,7 +163,7 @@ static void __exit ssa_exit(void) {
 	tls_prot.twsk_prot = NULL;
 
 	proto_unregister(&tls_prot);
-	printk(KERN_INFO "TLS Module removed and tls_prot unregistered\n");
+	printk(KERN_INFO "Secure Socket API module removed\n");
 	/* Free TLS socket handling data */
 	tls_cleanup();
 }

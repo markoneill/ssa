@@ -1,4 +1,4 @@
-ssa-objs := tls_upgrade.o tls_common.o tls_inet.o netlink.o loader.o
+ssa-objs := tls_upgrade.o tls_common.o tls_inet.o tls_unix.o netlink.o loader.o
 obj-m += ssa.o
 
 all:
