@@ -75,7 +75,7 @@ int tls_unix_init_sock(struct sock *sk) {
 	struct socket* unix_sock;
 	int ret;
 
-	ret = sock_create_kern(current->nsproxy->net_ns, PF_UNIX, SOCK_STREAM, 0, &unix_sock);
+	ret = sock_create(PF_UNIX, SOCK_STREAM, 0, &unix_sock);
 	if (ret != 0) {
 		printk(KERN_ALERT "Could not create unix sock\n");
 		return -1;
@@ -113,7 +113,8 @@ int tls_unix_release(struct socket* sock) {
 	if (sock_data == NULL) {
 		/* Since inet_create creates our sockets, we use inet_release
 		 * to free them */
-		return inet_release(sock);
+		//return inet_release(sock);
+		return 0;
 	}
 	send_close_notification(sock_data->key, sock_data->daemon_id);
 	//wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT);
@@ -123,7 +124,8 @@ int tls_unix_release(struct socket* sock) {
 	rem_tls_sock_data(&sock_data->hash);
 	kfree(sock_data);
 	ref_unix_stream_ops.release(sock_data->unix_sock);
-	return inet_release(sock);
+	//return inet_release(sock);
+	return 0;
 }
 
 int tls_unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
@@ -252,14 +254,14 @@ int tls_unix_setsockopt(struct socket *sock, int level, int optname, char __user
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return tls_common_setsockopt(unix_sock, level, optname, optval, optlen, NULL);
+	return tls_common_setsockopt(sock_data, unix_sock, level, optname, optval, optlen, NULL);
 }
 
 int tls_unix_getsockopt(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return tls_common_getsockopt(unix_sock, level, optname, optval, optlen, NULL);
+	return tls_common_getsockopt(sock_data, unix_sock, level, optname, optval, optlen, NULL);
 }
 
 int tls_unix_getname(struct socket *sock, struct sockaddr *uaddr, int *uaddr_len, int peer) {

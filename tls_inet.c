@@ -239,10 +239,18 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 }
 
 int tls_inet_setsockopt(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen) {
-	return tls_common_setsockopt(sock, level, optname, optval, optlen, ref_inet_stream_ops.setsockopt);
+	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
+	if (sock_data == NULL) {
+		return -EBADF;
+	}
+	return tls_common_setsockopt(sock_data, sock, level, optname, optval, optlen, ref_inet_stream_ops.setsockopt);
 }
 
 int tls_inet_getsockopt(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen) {
-	return tls_common_getsockopt(sock, level, optname, optval, optlen, ref_inet_stream_ops.getsockopt);
+	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
+	if (sock_data == NULL) {
+		return -EBADF;
+	}
+	return tls_common_getsockopt(sock_data, sock, level, optname, optval, optlen, ref_inet_stream_ops.getsockopt);
 }
 
