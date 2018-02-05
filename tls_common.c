@@ -14,8 +14,8 @@
 #define MAX_HOST_LEN		255
 
 /* Helpers */
-int get_hostname(struct socket* sock, char __user *optval, int* __user len);
-int get_id(struct socket* sock, char __user *optval, int* __user optlen);
+int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len);
+int get_id(tls_sock_data_t* sock_data, char __user *optval, int* __user optlen);
 int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len);
 static int is_valid_host_string(char* str, int len);
 
@@ -156,7 +156,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 		return ret;
 	}
 
-	send_setsockopt_notification((unsigned long)sock, level, optname, koptval, optlen, sock_data->daemon_id);
+	send_setsockopt_notification((unsigned long)sock_data->key, level, optname, koptval, optlen, sock_data->daemon_id);
 	kfree(koptval);
 	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
@@ -192,14 +192,14 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	}
 	switch (optname) {
 		case SO_HOSTNAME:
-			return get_hostname(sock, optval, optlen);
+			return get_hostname(sock_data, optval, optlen);
 		case SO_ID:
-			return get_id(sock, optval, optlen);
+			return get_id(sock_data, optval, optlen);
 		case SO_PEER_CERTIFICATE:
 		/* We'll probably add all other daemon-required getsockopt options here
 		 * as fall-through cases. The following implementation is fairly generic.
 		 */
-			send_getsockopt_notification((unsigned long)sock, level, optname, sock_data->daemon_id);
+			send_getsockopt_notification((unsigned long)sock_data->key, level, optname, sock_data->daemon_id);
 			if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 				/* Let's lie to the application if the daemon isn't responding */
 				return -ENOBUFS;
@@ -254,14 +254,10 @@ int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len) {
 	return  0;
 }
 
-int get_hostname(struct socket* sock, char __user *optval, int* __user len) {
+int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len) {
 	int hostname_len;
-	tls_sock_data_t* data;
 	char* hostname = NULL;
-	if ((data = get_tls_sock_data((unsigned long)sock)) == NULL) {
-		return -EBADF;
-	}
-	hostname = data->hostname;
+	hostname = sock_data->hostname;
 	if (hostname == NULL) {
 		return -EFAULT;
 	}
@@ -277,16 +273,16 @@ int get_hostname(struct socket* sock, char __user *optval, int* __user len) {
 }
 
 /* The ID is just the pointer value sk */
-int get_id(struct socket* sock, char __user *optval, int* __user optlen) {
+int get_id(tls_sock_data_t* sock_data, char __user *optval, int* __user optlen) {
 	int len;
 	if (get_user(len, optlen)) {
 		return -EFAULT;
 	}
-	len = min_t(unsigned int, len, sizeof(sock));
+	len = min_t(unsigned int, len, sizeof(unsigned long));
 	if (put_user(len, optlen)) {
 		return -EFAULT;
 	}
-	if (copy_to_user(optval, &sock, len)) {
+	if (copy_to_user(optval, &sock_data->key, len)) {
 		return -EFAULT;
 	}
 	return 0;
