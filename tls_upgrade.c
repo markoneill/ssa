@@ -64,25 +64,17 @@ int sockdup2(int oldfd, struct socket* sock) {
 		}
 	}
 
-	printk(KERN_ERR "New shiny = %p\n", sock->file);
-
 	// lock the files
 	spin_lock(&files->file_lock);
 
 	// grab the old filp
 	filp = files->fdt->fd[oldfd];
 
-	printk(KERN_ERR "Old fp = %p\n", files->fdt->fd[oldfd]);
-	
 	// NULL out oldfd
 	files->fdt->fd[oldfd] = NULL;
 	
-	printk(KERN_ERR "Nulled out = %p\n", files->fdt->fd[oldfd]);
-	
 	// replace it with the new
 	fd_install(oldfd, sock->file); 
-
-	printk(KERN_ERR "New shiny? = %p\n", files->fdt->fd[oldfd]);
 
 	// unlock
 	spin_unlock(&files->file_lock);
@@ -214,7 +206,6 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	struct socket* new_sock;
 	struct sockaddr_in daemon_addr;
 	socket_state state;
-
 	
 	//TODO get rid of printfs
 	//printk(KERN_INFO "Hook called\n");
@@ -249,6 +240,18 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 		// on this tcp sock we need to know if this is a connection, unconnected, listening, accepted
 		// check if it is already connected, if so connect it
 		state = sk->sk_socket->state;
+		
+		// create the correct message to send
+		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock);
+		// gift the original connection
+		// and recv for a completion
+		error = write_fd(fd, con_info, con_info_size);
+		if (error < 0) {
+			printk(KERN_ERR "Error sending the file descriptor to the daemon\n");
+			sock_release(new_sock);
+			return -1;
+		}
+		printk(KERN_INFO "Sent fd\n");
 
 		if (is_accepting || state == SS_CONNECTED || state == SS_CONNECTING) {
 			// connect the socket
@@ -266,18 +269,6 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 				return -1;
 			}
 		}
-		
-		// create the correct message to send
-		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock->sk);
-		// gift the original connection
-		// and recv for a completion
-		error = write_fd(fd, con_info, con_info_size);
-		if (error < 0) {
-			printk(KERN_ERR "Error sending the file descriptor to the daemon\n");
-			sock_release(new_sock);
-			return -1;
-		}
-		printk(KERN_INFO "Sent fd\n");
 		
 		// dup2 tls over fd
 		// so we can't acutally use dup_2, so we null out the fd and install it quickly, haha.
