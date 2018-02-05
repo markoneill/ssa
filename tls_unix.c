@@ -266,56 +266,57 @@ int tls_unix_getname(struct socket *sock, struct sockaddr *uaddr, int *uaddr_len
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.getname(sock, uaddr, uaddr_len, peer);
+	return ref_unix_stream_ops.getname(unix_sock, uaddr, uaddr_len, peer);
 }
 
 unsigned int tls_unix_poll(struct file *file, struct socket *sock, struct poll_table_struct *wait) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.poll(file, sock, wait);
+	/* Uh oh. File XXX?*/
+	return ref_unix_stream_ops.poll(file, unix_sock, wait);
 }
 
 int tls_unix_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.ioctl(sock, cmd, arg);
+	return ref_unix_stream_ops.ioctl(unix_sock, cmd, arg);
 }
 
 int tls_unix_shutdown(struct socket *sock, int how) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.shutdown(sock, how);
+	return ref_unix_stream_ops.shutdown(unix_sock, how);
 }
 
 int tls_unix_sendmsg(struct socket *sock, struct msghdr *msg, size_t size) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.sendmsg(sock, msg, size);
+	return ref_unix_stream_ops.sendmsg(unix_sock, msg, size);
 }
 
 int tls_unix_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.recvmsg(sock, msg, size, flags);
+	return ref_unix_stream_ops.recvmsg(unix_sock, msg, size, flags);
 }
 
 ssize_t tls_unix_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.sendpage(sock, page, offset, size, flags);
+	return ref_unix_stream_ops.sendpage(unix_sock, page, offset, size, flags);
 }
 
 ssize_t tls_unix_splice_read(struct socket *sk, loff_t *ppos, struct pipe_inode_info *pipe, size_t len, unsigned int flags) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sk);
 	unix_sock = sock_data->unix_sock;
-	return ref_unix_stream_ops.splice_read(sk, ppos, pipe, len, flags);
+	return ref_unix_stream_ops.splice_read(unix_sock, ppos, pipe, len, flags);
 }
 
 

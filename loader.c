@@ -54,7 +54,7 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 
 /* The TLS protocol structures to be filled and registered */
-static int internal_transport_mode = INET_MODE;
+static int internal_transport_mode = UNIX_MODE;
 static struct proto tls_prot;
 static struct proto_ops tls_proto_ops;
 static struct net_protocol tls_protocol;
