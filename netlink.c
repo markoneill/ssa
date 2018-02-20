@@ -453,17 +453,20 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	return 0;
 }
 
-int send_accept_notification(unsigned long id, char* comm, int port_id) {
+int send_accept_notification(unsigned long id, struct sockaddr* int_addr, int port_id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			nla_total_size(sizeof(struct sockaddr)) +
+			nla_total_size(sizeof(int));
 
-	skb = genlmsg_new(32, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [accept notify]\n");
 		return -1;
 	}
-	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_SOCKET_NOTIFY);
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_ACCEPT_NOTIFY);
 	if (msg_head == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_put [accept notify]\n");
 		nlmsg_free(skb);
@@ -475,9 +478,9 @@ int send_accept_notification(unsigned long id, char* comm, int port_id) {
 		nlmsg_free(skb);
 		return -1;
 	}
-	ret = nla_put(skb, SSA_NL_A_COMM, strlen(comm)+1, comm);
+	ret = nla_put(skb, SSA_NL_A_SOCKADDR_INTERNAL, sizeof(struct sockaddr), int_addr);
 	if (ret != 0) {
-		printk(KERN_ALERT "Failed in nla_put (comm) [accept notify]\n");
+		printk(KERN_ALERT "Failed in nla_put (internal) [accept notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}

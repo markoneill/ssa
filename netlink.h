@@ -54,7 +54,7 @@ int send_getsockopt_notification(unsigned long id, int level, int optname, int p
 int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr, int port_id);
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int port_id);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr, int port_id);
-int send_accept_notification(unsigned long id, char* comm, int port_id);
+int send_accept_notification(unsigned long id, struct sockaddr* int_addr, int port_id);
 int send_close_notification(unsigned long id, int port_id);
 int send_upgrade_notification(unsigned long id, struct sockaddr* src_addr, int port_id);
 void unregister_netlink(void);
