@@ -66,6 +66,13 @@ static struct genl_ops ssa_nl_ops[] = {
                 .dumpit = NULL,
         },
         {
+                .cmd = SSA_NL_C_ACCEPT_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
+        {
                 .cmd = SSA_NL_C_CLOSE_NOTIFY,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
@@ -442,6 +449,46 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	ret = genlmsg_unicast(&init_net, skb, port_id);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_unicast [listen notify]\n (%d)", ret);
+	}
+	return 0;
+}
+
+int send_accept_notification(unsigned long id, char* comm, int port_id) {
+	struct sk_buff* skb;
+	int ret;
+	void* msg_head;
+
+	skb = genlmsg_new(32, GFP_KERNEL);
+	if (skb == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_new [accept notify]\n");
+		return -1;
+	}
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_SOCKET_NOTIFY);
+	if (msg_head == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_put [accept notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (id) [accept notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_COMM, strlen(comm)+1, comm);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (comm) [accept notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	genlmsg_end(skb, msg_head);
+	/*ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [accept notify] (%d)\n", ret);
+	}*/
+	ret = genlmsg_unicast(&init_net, skb, port_id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_unicast [accept notify]\n (%d)", ret);
 	}
 	return 0;
 }
