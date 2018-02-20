@@ -240,40 +240,38 @@ int tls_inet_listen(struct socket *sock, int backlog) {
 }
 
 int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
+	tls_sock_data_t* listen_sock_data;
 	tls_sock_data_t* sock_data;
 	int ret;
-	//char comm[NAME_MAX];
-	//char* comm_ptr;
-
-	//printk(KERN_ALERT "Accept called\n");
-	//
 	ret = ref_inet_stream_ops.accept(sock, newsock, flags, kern);
 	if (ret != 0) {
 		return ret;
 	}
+
+	listen_sock_data = get_tls_sock_data((unsigned long)sock);
+	if (listen_sock_data == NULL) {
+		return -EBADF;
+	}
 	
 	if ((sock_data = kmalloc(sizeof(tls_sock_data_t), GFP_KERNEL)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_inet_init_sock\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	memset(sock_data, 0, sizeof(tls_sock_data_t));
 
 	sock_data->pid = current->pid;
 	sock_data->sk = newsock->sk;
-	sock_data->daemon_id = 8443; /* XXX FIX */
+	sock_data->daemon_id = listen_sock_data->daemon_id;
 	sock_data->key = (unsigned long)newsock;
 	init_completion(&sock_data->sock_event);
 	put_tls_sock_data(sock_data->key, &sock_data->hash);
-
-	//comm_ptr = get_full_comm(comm, NAME_MAX);
 
 	((struct sockaddr_in*)&sock_data->int_addr)->sin_family = AF_INET;
 	((struct sockaddr_in*)&sock_data->int_addr)->sin_port = inet_sk(newsock->sk)->inet_dport;
 	((struct sockaddr_in*)&sock_data->int_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	send_accept_notification((unsigned long)newsock, &sock_data->int_addr, sock_data->daemon_id);
 	wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT);
-	/* We're not checking return values here because init_sock always returns 0 */
 	return ret;
 }
 
