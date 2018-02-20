@@ -6,6 +6,8 @@
 #include <linux/socket.h>
 #include <linux/net.h>
 #include <linux/uaccess.h>
+#include <linux/sched/mm.h>
+#include <linux/fs_struct.h>
 #include "socktls.h"
 #include "tls_common.h"
 #include "netlink.h"
@@ -18,6 +20,8 @@ int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user le
 int get_id(tls_sock_data_t* sock_data, char __user *optval, int* __user optlen);
 int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len);
 static int is_valid_host_string(char* str, int len);
+char* get_absolute_path(char* rpath, int* rpath_len);
+char* kgetcwd(char* buffer, int buflen);
 
 static DEFINE_HASHTABLE(tls_sock_data_table, HASH_TABLE_BITSIZE);
 static DEFINE_SPINLOCK(tls_sock_data_table_lock);
@@ -143,6 +147,15 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 			break;
 		case SO_CERTIFICATE_CHAIN:
 		case SO_PRIVATE_KEY:
+			/* We convert relative paths to absolute ones
+			 * here. We also skip things prefixed with '-'
+			 * because that denotes direct PEM encoding */
+			if (koptval[0] != '-' && koptval[0] != '/') {
+				koptval = get_absolute_path(koptval, &optlen);
+				if (koptval == NULL) {
+					return -ENOMEM;
+				}
+			}
 		default:
 			ret = 0;
 			break;
@@ -310,3 +323,59 @@ int is_valid_host_string(char* str, int len) {
         return 1;
 }
 
+char* get_full_comm(char* buffer, int buflen) {
+	char* path_ptr;
+	struct file* exe_file;
+	struct mm_struct* mm;
+	mm = get_task_mm(current);
+	if (mm == NULL) {
+		return NULL;
+	}
+
+	down_read(&mm->mmap_sem);
+	exe_file = mm->exe_file;
+	if (exe_file == NULL) {
+		up_read(&mm->mmap_sem);
+		return NULL;
+	}
+
+	path_ptr = d_path(&exe_file->f_path, buffer, buflen);
+
+	up_read(&mm->mmap_sem);
+	return path_ptr;
+}
+
+char* kgetcwd(char* buffer, int buflen) {
+	char* path_ptr;
+	struct path pwd;
+	get_fs_pwd(current->fs, &pwd);
+
+	path_ptr = d_path(&pwd, buffer, buflen);
+	return path_ptr;
+}
+
+char* get_absolute_path(char* rpath, int* rpath_len) {
+	char* apath;
+	char* bpath;
+	int bpath_len;
+	char tmp[NAME_MAX];
+	apath = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (apath == NULL) {
+		kfree(rpath);
+		return NULL;
+	}
+
+	bpath = kgetcwd(tmp, NAME_MAX);
+	bpath_len = strlen(bpath);
+	bpath[bpath_len] = '/';
+	bpath_len++;
+	if ((bpath_len + (*rpath_len)) >= PATH_MAX) {
+		kfree(rpath);
+		return NULL;
+	}
+	memcpy(apath, bpath, bpath_len);
+	memcpy(apath + bpath_len, rpath, *rpath_len);
+	kfree(rpath);
+	*rpath_len = strlen(apath)+1;
+	return apath;
+}

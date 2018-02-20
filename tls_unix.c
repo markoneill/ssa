@@ -74,6 +74,8 @@ int tls_unix_init_sock(struct sock *sk) {
 	tls_sock_data_t* sock_data;
 	struct socket* unix_sock;
 	int ret;
+	char comm[NAME_MAX];
+	char* comm_ptr;
 
 	ret = sock_create(PF_UNIX, SOCK_STREAM, 0, &unix_sock);
 	if (ret != 0) {
@@ -101,7 +103,9 @@ int tls_unix_init_sock(struct sock *sk) {
 	init_completion(&sock_data->sock_event);
 	put_tls_sock_data(sock_data->key, &sock_data->hash);
 	
-	send_socket_notification(sock_data->key, sock_data->daemon_id);
+	comm_ptr = get_full_comm(comm, NAME_MAX);
+
+	send_socket_notification(sock_data->key, comm_ptr, sock_data->daemon_id);
 	wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking daemon return values here because init_sock needs to return
 	 * at this point anyway 0 */

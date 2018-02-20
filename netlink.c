@@ -11,6 +11,8 @@ int daemon_data_cb(struct sk_buff* skb, struct genl_info* info);
 static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_UNSPEC] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_ID] = { .type = NLA_UNSPEC },
+	//[SSA_NL_A_PID] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_COMM] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_SOCKADDR_REMOTE] = { .type = NLA_UNSPEC },
@@ -168,7 +170,7 @@ void unregister_netlink() {
 	return;
 }
 
-int send_socket_notification(unsigned long id, int port_id) {
+int send_socket_notification(unsigned long id, char* comm, int port_id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
@@ -187,6 +189,12 @@ int send_socket_notification(unsigned long id, int port_id) {
 	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in nla_put (id) [socket notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_COMM, strlen(comm)+1, comm);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (comm) [socket notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}

@@ -81,4 +81,7 @@ void report_data_return(unsigned long key, char* data, unsigned int len);
 int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen, setsockopt_t orig_func);
 int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int level, int optname, char __user *optval, int __user *optlen, getsockopt_t orig_func);
 
+/* Misc */
+char* get_full_comm(char* buffer, int buflen);
+
 #endif /* TLS_COMMON_H */

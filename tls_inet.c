@@ -6,6 +6,7 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <net/inet_common.h>
+#include <linux/limits.h>
 #include <linux/cpumask.h>
 #include "tls_inet.h"
 #include "tls_common.h"
@@ -75,6 +76,8 @@ void inet_stream_cleanup(void) {
 int tls_inet_init_sock(struct sock *sk) {
 	int ret;
 	tls_sock_data_t* sock_data;
+	char comm[NAME_MAX];
+	char* comm_ptr;
 
 	if ((sock_data = kmalloc(sizeof(tls_sock_data_t), GFP_KERNEL)) == NULL) {
 		printk(KERN_ALERT "kmalloc failed in tls_inet_init_sock\n");
@@ -98,7 +101,9 @@ int tls_inet_init_sock(struct sock *sk) {
 	put_tls_sock_data(sock_data->key, &sock_data->hash);
 	ret = ref_tcp_prot.init(sk);
 
-	send_socket_notification((unsigned long)sk->sk_socket, sock_data->daemon_id);
+	comm_ptr = get_full_comm(comm, NAME_MAX);
+
+	send_socket_notification((unsigned long)sk->sk_socket, comm_ptr, sock_data->daemon_id);
 	wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT);
 	/* We're not checking return values here because init_sock always returns 0 */
 	return ret;
