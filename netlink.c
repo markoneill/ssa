@@ -181,8 +181,10 @@ int send_socket_notification(unsigned long id, char* comm, int port_id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			nla_total_size(strlen(comm)+1);
 
-	skb = genlmsg_new(32, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [socket notify]\n");
 		return -1;
@@ -221,8 +223,11 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			2 * nla_total_size(sizeof(int)) +
+			optlen;
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [setsockopt notify]\n");
 		return -1;
@@ -273,8 +278,10 @@ int send_getsockopt_notification(unsigned long id, int level, int optname, int p
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			2 * nla_total_size(sizeof(int));
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [getsockopt notify]\n");
 		return -1;
@@ -319,8 +326,10 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			2 * nla_total_size(sizeof(struct sockaddr));
 
-	skb = genlmsg_new(64, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [bind notify]\n");
 		return -1;
@@ -365,8 +374,10 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			2 * nla_total_size(sizeof(struct sockaddr));
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [connect notify]\n");
 		return -1;
@@ -411,8 +422,10 @@ int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			2 * nla_total_size(sizeof(struct sockaddr));
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [listen notify]\n");
 		return -1;
@@ -500,8 +513,9 @@ int send_close_notification(unsigned long id, int port_id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long));
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_ATOMIC);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [close notify]\n");
 		return -1;
@@ -535,8 +549,10 @@ int send_upgrade_notification(unsigned long id, struct sockaddr* src_addr, int p
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			nla_total_size(sizeof(struct sockaddr));
 
-	skb = genlmsg_new(GENLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
 		printk(KERN_ALERT "Failed in genlmsg_new [upgrade notify]\n");
 		return -1;

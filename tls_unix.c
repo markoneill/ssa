@@ -93,7 +93,6 @@ int tls_unix_init_sock(struct sock *sk) {
 
 	((struct sockaddr_un*)&sock_data->int_addr)->sun_family = AF_UNIX;
 	
-	sock_data->pid = current->pid;
 	sock_data->key = (unsigned long)sk->sk_socket;
 	sock_data->unix_sock = unix_sock;
 	sock_data->daemon_id = DAEMON_START_PORT;
@@ -162,7 +161,7 @@ int tls_unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	if (sock_data->response != 0) {
 		return sock_data->response;
 	}
-	sock_data->has_bound = 1;
+	sock_data->is_bound = 1;
 	sock_data->int_addrlen = sizeof(sa_family_t) + 6;
 	sock_data->ext_addr = *uaddr;
 	sock_data->ext_addrlen = addr_len;
@@ -190,11 +189,11 @@ int tls_unix_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	/* Pre-emptively bind the source port so we can register it before remote
 	 * connection. We only do this if the application hasn't explicitly called
 	 * bind already */
-	if (sock_data->has_bound == 0) {
+	if (sock_data->is_bound == 0) {
 		ref_unix_stream_ops.bind(unix_sock, (struct sockaddr*)&int_addr, sizeof(sa_family_t));
 		sock_data->int_addrlen = sizeof(sa_family_t) + 6;
 		memcpy(&sock_data->int_addr, unix_sk(unix_sock->sk)->addr->name, sock_data->int_addrlen);
-		sock_data->has_bound = 1;
+		sock_data->is_bound = 1;
 	}
 
 	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, sock_data->daemon_id);
@@ -225,12 +224,12 @@ int tls_unix_listen(struct socket *sock, int backlog) {
 
 	unix_sock = sock_data->unix_sock;
 
-	if (sock_data->has_bound == 0) {
+	if (sock_data->is_bound == 0) {
 		/* Invoke autobind */
 		ref_unix_stream_ops.bind(unix_sock, (struct sockaddr*)&int_addr, sizeof(sa_family_t));
 		sock_data->int_addrlen = sizeof(sa_family_t) + 6;
 		memcpy(&sock_data->int_addr, unix_sk(unix_sock->sk)->addr->name, sock_data->int_addrlen);
-		sock_data->has_bound = 1;
+		sock_data->is_bound = 1;
 	}
 	send_listen_notification((unsigned long)sock, 
 			(struct sockaddr*)&sock_data->int_addr,
@@ -247,6 +246,10 @@ int tls_unix_listen(struct socket *sock, int backlog) {
 	return ref_unix_stream_ops.listen(unix_sock, backlog);
 }
 
+/* XXX Unix development has essentially halted since it didn't
+ * seem to enhance performance. the accept method, and maybe some
+ * others, will need to be updated to reflect current inet practices
+ * if it is to be used again */
 int tls_unix_accept(struct socket *sock, struct socket *newsock, int flags, bool kern) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);

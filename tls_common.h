@@ -52,11 +52,9 @@ typedef struct tls_sock_data {
 	int int_addrlen;
 	struct sockaddr rem_addr;
 	int rem_addrlen;
-	int has_bound; /* zero if no bind explicitly called  by app */
-        pid_t pid;
         char *hostname;
+	int is_bound;
 	int is_connected;
-        struct sock* sk;
 	struct completion sock_event;
 	int response;
 	char* rdata; /* returned data from asynchronous callback */

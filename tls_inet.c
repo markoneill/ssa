@@ -90,8 +90,6 @@ int tls_inet_init_sock(struct sock *sk) {
 	((struct sockaddr_in*)&sock_data->int_addr)->sin_port = 0;
 	((struct sockaddr_in*)&sock_data->int_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-	sock_data->pid = current->pid;
-	sock_data->sk = sk;
 	sock_data->key = (unsigned long)sk->sk_socket;
 	sock_data->daemon_id = DAEMON_START_PORT;
 	//sock_data->daemon_id = DAEMON_START_PORT + (balancer % nr_cpu_ids);
@@ -153,7 +151,7 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 	if (sock_data->response != 0) {
 		return sock_data->response;
 	}
-	sock_data->has_bound = 1;
+	sock_data->is_bound = 1;
 	sock_data->int_addrlen = addr_len;
 	sock_data->ext_addr = *uaddr;
 	sock_data->ext_addrlen = addr_len;
@@ -182,11 +180,11 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	/* Pre-emptively bind the source port so we can register it before remote
 	 * connection. We only do this if the application hasn't explicitly called
 	 * bind already */
-	if (sock_data->has_bound == 0) {
+	if (sock_data->is_bound == 0) {
 		ref_inet_stream_ops.bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
 		memcpy(&sock_data->int_addr, &int_addr, sizeof(int_addr));
-		sock_data->has_bound = 1;
+		sock_data->is_bound = 1;
 		sock_data->int_addrlen = sizeof(int_addr);
 	}
 
@@ -216,12 +214,12 @@ int tls_inet_listen(struct socket *sock, int backlog) {
                 .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         };
 
-	if (sock_data->has_bound == 0) {
+	if (sock_data->is_bound == 0) {
 		ref_inet_stream_ops.bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
 		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
 		memcpy(&sock_data->int_addr, &int_addr, sizeof(int_addr));
 		sock_data->int_addrlen = sizeof(int_addr);
-		sock_data->has_bound = 1;
+		sock_data->is_bound = 1;
 	}
 	send_listen_notification((unsigned long)sock, 
 			(struct sockaddr*)&sock_data->int_addr,
@@ -254,14 +252,12 @@ int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool
 	}
 	
 	if ((sock_data = kmalloc(sizeof(tls_sock_data_t), GFP_KERNEL)) == NULL) {
-		printk(KERN_ALERT "kmalloc failed in tls_inet_init_sock\n");
+		printk(KERN_ALERT "kmalloc failed in tls_inet_accept\n");
 		return -ENOMEM;
 	}
 
 	memset(sock_data, 0, sizeof(tls_sock_data_t));
 
-	sock_data->pid = current->pid;
-	sock_data->sk = newsock->sk;
 	sock_data->daemon_id = listen_sock_data->daemon_id;
 	sock_data->key = (unsigned long)newsock;
 	init_completion(&sock_data->sock_event);
