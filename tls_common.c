@@ -250,9 +250,11 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 }
 
 int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len) {
+	/*
 	if (sock_data->is_connected == 1) {
 		return -EISCONN;
 	}
+	*/
 	if (len > MAX_HOST_LEN) {
 		return -EINVAL;
 	}
