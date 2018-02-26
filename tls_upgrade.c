@@ -10,19 +10,19 @@
 #include <linux/err.h>
 #include <linux/socket.h>
 #include "tls_upgrade.h"
+#include "tls_common.h"
 #include "socktls.h"
 
 #define TCP_UPGRADE_TLS	33
 
-#define TLS_UPGRADE_PATH	"\0tls_upgrade" 
-#define TLS_UPGRADE_PATH_LEN	sizeof(TLS_UPGRADE_PATH)
+#define TLS_UPGRADE_NAME_MAX 18
 
 #define MAX_CON_INFO_SIZE	64
 
 int recv_con(struct socket* sock);
 int sockdup2(int oldfd, struct socket* sock);
 int getsk_fd(struct sock* sk);
-ssize_t write_fd(int fd_gift, char* buf, int buf_sz);
+ssize_t write_fd(int fd_gift, char* buf, int buf_sz, int port);
 
 extern int (*orig_tcp_setsockopt)(struct sock*, int, int, char __user*, unsigned int);
 
@@ -109,12 +109,14 @@ int getsk_fd(struct sock* sk) {
 
 // takes the fd you want to gift to the daemon
 // the buf and buf size are the message
-ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
+ssize_t write_fd(int fd_gift, char* buf, int buf_sz, int port) {
 	int error;
 	struct socket* sock;
 	struct sockaddr_un addr;
 	int addr_len;
-    	struct sockaddr_un self;
+    struct sockaddr_un self;
+    char tls_upgrade_path[TLS_UPGRADE_NAME_MAX];
+	int pathlen = snprintf(tls_upgrade_path, TLS_UPGRADE_NAME_MAX, "%ctls_upgrade%d", '\0', port);
 
 	struct msghdr msg = {0};
 	struct kvec iov;
@@ -135,8 +137,8 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz) {
 	
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
-	memcpy(addr.sun_path, TLS_UPGRADE_PATH, TLS_UPGRADE_PATH_LEN);
-	addr_len = TLS_UPGRADE_PATH_LEN + sizeof(sa_family_t);
+	memcpy(addr.sun_path, tls_upgrade_path, pathlen);
+	addr_len = pathlen + sizeof(sa_family_t);
 
 	printk(KERN_INFO "Connecting to daemon\n");
 	
@@ -206,6 +208,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	struct socket* new_sock;
 	struct sockaddr_in daemon_addr;
 	socket_state state;
+	tls_sock_data_t* sock_data;// get_tls_sock_data(unsigned long key);
 	
 	//TODO get rid of printfs
 	//printk(KERN_INFO "Hook called\n");
@@ -236,6 +239,8 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 			return -1;
 		}
 		printk(KERN_INFO "Made replacement connection\n");
+
+		sock_data = get_tls_sock_data((unsigned long)new_sock);
 		
 		// on this tcp sock we need to know if this is a connection, unconnected, listening, accepted
 		// check if it is already connected, if so connect it
@@ -245,7 +250,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 		con_info_size = snprintf(con_info, MAX_CON_INFO_SIZE, "%d:%lu", is_accepting, (long unsigned int)(void*)new_sock);
 		// gift the original connection
 		// and recv for a completion
-		error = write_fd(fd, con_info, con_info_size);
+		error = write_fd(fd, con_info, con_info_size, sock_data->daemon_id);
 		if (error < 0) {
 			printk(KERN_ERR "Error sending the file descriptor to the daemon\n");
 			sock_release(new_sock);
@@ -259,7 +264,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 			// if we direct connect it is cool
 			daemon_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 			daemon_addr.sin_family = AF_INET;
-			daemon_addr.sin_port = htons(8443);
+			daemon_addr.sin_port = htons(sock_data->daemon_id);
 		
 			printk(KERN_INFO "Connecting replacement connection\n");
 			error = kernel_connect(new_sock, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr), 0);
