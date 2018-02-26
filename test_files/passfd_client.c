@@ -7,15 +7,12 @@
 #include <string.h>
 #include <errno.h>
 
+#include "socktls.h"
 #define ADDR	"localhost"
 #define PORT	8080
 
 #define MSG	"Hey from the client!\n"
 
-#define TCP_UPGRADE_TLS	33
-
-#define IPPROTO_TLS 205
-#define SO_HOSTNAME 85
 
 int main(int argc, char** argv) {
 	struct sockaddr_in addr;
@@ -53,7 +50,7 @@ int main(int argc, char** argv) {
 	printf("Setsockopt %d\n", setsockopt(con, SOL_TCP, TCP_UPGRADE_TLS, &optval, optlen));
 
 	// set hostname
-	setsockopt(con, IPPROTO_TLS, SO_HOSTNAME, "google.com", sizeof("google.com"));
+	setsockopt(con, IPPROTO_TLS, SO_REMOTE_HOSTNAME, "google.com", sizeof("google.com"));
 
 
 	error = send(con, MSG, sizeof(MSG), 0);

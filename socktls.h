@@ -5,8 +5,8 @@
 #define IPPROTO_TLS     (715 % 255)
 
 /* Options */
-#define SO_HOSTNAME                      85
-#define SO_PEER_SNI                      86
+#define SO_REMOTE_HOSTNAME               85
+#define SO_HOSTNAME                      86
 #define SO_TRUSTED_PEER_CERTIFICATES     87
 #define SO_CERTIFICATE_CHAIN             88
 #define SO_PRIVATE_KEY                   89

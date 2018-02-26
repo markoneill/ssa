@@ -142,7 +142,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	 * we can retrieve them directly from the kernel when
 	 * the application uses getsockopt */
 	switch (optname) {
-		case SO_HOSTNAME:
+		case SO_REMOTE_HOSTNAME:
 			ret = set_hostname(sock_data, koptval, optlen);
 			break;
 		case SO_CERTIFICATE_CHAIN:
@@ -182,7 +182,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	/* We only get here if the daemonside setsockopt succeeded */
 
 	switch (optname) {
-		case SO_HOSTNAME:
+		case SO_REMOTE_HOSTNAME:
 		case SO_CERTIFICATE_CHAIN:
 		case SO_PRIVATE_KEY:
 			break;
@@ -204,7 +204,7 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 		return -EFAULT;
 	}
 	switch (optname) {
-		case SO_HOSTNAME:
+		case SO_REMOTE_HOSTNAME:
 			return get_hostname(sock_data, optval, optlen);
 		case SO_ID:
 			return get_id(sock_data, optval, optlen);

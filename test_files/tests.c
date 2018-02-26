@@ -177,8 +177,8 @@ void run_sockops_tests(void) {
 	}
 
 	const char hostname[] = "www.google.com";
-        if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
-		perror("setsockopt: SO_HOSTNAME");
+        if (setsockopt(sock_fd, IPPROTO_IP, SO_REMOTE_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+		perror("setsockopt: SO_REMOTE_HOSTNAME");
 		exit(EXIT_FAILURE);
 	}
 
@@ -189,8 +189,8 @@ void run_sockops_tests(void) {
 
 	char hostname_retrieved[MAX_HOSTNAME];
 	int hostname_length = MAX_HOSTNAME;
-	if (getsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname_retrieved, &hostname_length) == -1) {
-		perror("getsockopt: SO_HOSTNAME");
+	if (getsockopt(sock_fd, IPPROTO_IP, SO_REMOTE_HOSTNAME, hostname_retrieved, &hostname_length) == -1) {
+		perror("getsockopt: SO_REMOTE_HOSTNAME");
 		exit(EXIT_FAILURE);
 	}
 
@@ -362,8 +362,8 @@ void run_remote_connect_benchmark(void) {
 	}
 
 	const char hostname[] = "openrebellion.com";
-        if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
-		perror("setsockopt: SO_HOSTNAME");
+        if (setsockopt(sock_fd, IPPROTO_IP, SO_REMOTE_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+		perror("setsockopt: SO_REMOTE_HOSTNAME");
 		exit(EXIT_FAILURE);
 	}
         struct sockaddr_in dst_addr = {
@@ -456,8 +456,8 @@ void run_connect_benchmark(void) {
 	}
 
 	const char hostname[] = "www.google.com";
-        if (setsockopt(sock_fd, IPPROTO_IP, SO_HOSTNAME, hostname, sizeof(hostname)) == -1) {
-		perror("setsockopt: SO_HOSTNAME");
+        if (setsockopt(sock_fd, IPPROTO_IP, SO_REMOTE_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+		perror("setsockopt: SO_REMOTE_HOSTNAME");
 		exit(EXIT_FAILURE);
 	}
         struct sockaddr_in dst_addr = {
@@ -688,8 +688,8 @@ int connect_to_host(char* host, char* service) {
 			perror("socket");
 			continue;
 		}
-	        if (setsockopt(sock, IPPROTO_IP, SO_HOSTNAME, host, strlen(host)+1) == -1) {
-			perror("setsockopt: SO_HOSTNAME");
+	        if (setsockopt(sock, IPPROTO_IP, SO_REMOTE_HOSTNAME, host, strlen(host)+1) == -1) {
+			perror("setsockopt: SO_REMOTE_HOSTNAME");
 			close(sock);
 			continue;
 		}
