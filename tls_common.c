@@ -16,9 +16,9 @@
 #define MAX_HOST_LEN		255
 
 /* Helpers */
-int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len);
+int get_remote_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len);
 int get_id(tls_sock_data_t* sock_data, char __user *optval, int* __user optlen);
-int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len);
+int set_remote_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len);
 static int is_valid_host_string(char* str, int len);
 char* get_absolute_path(char* rpath, int* rpath_len);
 char* kgetcwd(char* buffer, int buflen);
@@ -138,27 +138,35 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 		return -EFAULT;
 	}
 
-	/* Here we save all TLS-specific sockopt values so that
-	 * we can retrieve them directly from the kernel when
-	 * the application uses getsockopt */
 	switch (optname) {
-		case SO_REMOTE_HOSTNAME:
-			ret = set_hostname(sock_data, koptval, optlen);
-			break;
-		case SO_CERTIFICATE_CHAIN:
-		case SO_PRIVATE_KEY:
-			/* We convert relative paths to absolute ones
-			 * here. We also skip things prefixed with '-'
-			 * because that denotes direct PEM encoding */
-			if (koptval[0] != '-' && koptval[0] != '/') {
-				koptval = get_absolute_path(koptval, &optlen);
-				if (koptval == NULL) {
-					return -ENOMEM;
-				}
+	case SO_REMOTE_HOSTNAME:
+		ret = set_remote_hostname(sock_data, koptval, optlen);
+		break;
+	case SO_HOSTNAME:
+	case SO_TRUSTED_PEER_CERTIFICATES:
+		ret = 0;
+		break;
+	case SO_CERTIFICATE_CHAIN:
+	case SO_PRIVATE_KEY:
+		/* We convert relative paths to absolute ones
+		 * here. We also skip things prefixed with '-'
+		 * because that denotes direct PEM encoding */
+		if (koptval[0] != '-' && koptval[0] != '/') {
+			koptval = get_absolute_path(koptval, &optlen);
+			if (koptval == NULL) {
+				return -ENOMEM;
 			}
-		default:
-			ret = 0;
-			break;
+		}
+		ret = 0;
+		break;
+	case SO_ALPN:
+	case SO_SESSION_TTL:
+	case SO_DISABLE_CIPHER:
+	case SO_PEER_CERTIFICATE:
+	case SO_ID:
+	default:
+		ret = 0;
+		break;
 	}
 
 	/* We return early if preliminary checks during our
@@ -180,19 +188,12 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	}
 
 	/* We only get here if the daemonside setsockopt succeeded */
-
-	switch (optname) {
-		case SO_REMOTE_HOSTNAME:
-		case SO_CERTIFICATE_CHAIN:
-		case SO_PRIVATE_KEY:
-			break;
-		default:
-			/* Now we do the same thing to the application socket, if applicable */
-			if (orig_func != NULL) {
-				return orig_func(sock, level, optname, optval, optlen);
-			}
-			return -EOPNOTSUPP;
-			break;
+	if (level != IPPROTO_TLS) {
+		/* Now we do the same thing to the application socket, if applicable */
+		if (orig_func != NULL) {
+			return orig_func(sock, level, optname, optval, optlen);
+		}
+		return -EOPNOTSUPP;
 	}
 	return 0;
 }
@@ -203,53 +204,61 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	if (get_user(len, optlen)) {
 		return -EFAULT;
 	}
-	switch (optname) {
-		case SO_REMOTE_HOSTNAME:
-			return get_hostname(sock_data, optval, optlen);
-		case SO_ID:
-			return get_id(sock_data, optval, optlen);
-		case SO_PEER_CERTIFICATE:
-		/* We'll probably add all other daemon-required getsockopt options here
-		 * as fall-through cases. The following implementation is fairly generic.
-		 */
-			send_getsockopt_notification((unsigned long)sock_data->key, level, optname, sock_data->daemon_id);
-			if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
-				/* Let's lie to the application if the daemon isn't responding */
-				return -ENOBUFS;
-			}
-			if (sock_data->response != 0) {
-				return sock_data->response;
-			}
 
-
-			/* We set this to the minimum of actual data length and size
-			 * of user's buffer rather than aborting if the user one is 
-			 * smaller because POSIX says to silently truncate in this
-			 * case */
-			len = min_t(unsigned int, len, sock_data->rdata_len);
-			if (unlikely(put_user(len, optlen))) {
-				kfree(sock_data->rdata);
-				sock_data->rdata = NULL;
-				sock_data->rdata_len = 0;
-				return -EFAULT;
-			}
-			if (copy_to_user(optval, sock_data->rdata, len)) {
-				kfree(sock_data->rdata);
-				sock_data->rdata = NULL;
-				sock_data->rdata_len = 0;
-				return -EFAULT;
-			}
-			break;
-		default:
-			if (orig_func != NULL) {
-				return orig_func(sock, level, optname, optval, optlen);
-			}
-			return -EOPNOTSUPP;
+	if (level != IPPROTO_TLS) {
+		if (orig_func != NULL) {
+			return orig_func(sock, level, optname, optval, optlen);
+		}
+		return -EOPNOTSUPP;
 	}
+
+	switch (optname) {
+	case SO_REMOTE_HOSTNAME:
+		return get_remote_hostname(sock_data, optval, optlen);
+	case SO_HOSTNAME:
+	case SO_TRUSTED_PEER_CERTIFICATES:
+	case SO_CERTIFICATE_CHAIN:
+	case SO_PRIVATE_KEY:
+	case SO_ALPN:
+	case SO_SESSION_TTL:
+	case SO_DISABLE_CIPHER:
+	case SO_PEER_CERTIFICATE:
+		send_getsockopt_notification((unsigned long)sock_data->key, level, optname, sock_data->daemon_id);
+		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+			/* Let's lie to the application if the daemon isn't responding */
+			return -ENOBUFS;
+		}
+		if (sock_data->response != 0) {
+			return sock_data->response;
+		}
+		/* We set this to the minimum of actual data length and size
+		 * of user's buffer rather than aborting if the user one is 
+		 * smaller because POSIX says to silently truncate in this
+		 * case */
+		len = min_t(unsigned int, len, sock_data->rdata_len);
+		if (unlikely(put_user(len, optlen))) {
+			kfree(sock_data->rdata);
+			sock_data->rdata = NULL;
+			sock_data->rdata_len = 0;
+			return -EFAULT;
+		}
+		if (copy_to_user(optval, sock_data->rdata, len)) {
+			kfree(sock_data->rdata);
+			sock_data->rdata = NULL;
+			sock_data->rdata_len = 0;
+			return -EFAULT;
+		}
+		break;
+	case SO_ID:
+		return get_id(sock_data, optval, optlen);
+	default:
+		return -EOPNOTSUPP;
+	}
+	
 	return 0;
 }
 
-int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len) {
+int set_remote_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len) {
 	/*
 	if (sock_data->is_connected == 1) {
 		return -EISCONN;
@@ -269,7 +278,7 @@ int set_hostname(tls_sock_data_t* sock_data, char* optval, unsigned int len) {
 	return  0;
 }
 
-int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len) {
+int get_remote_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user len) {
 	int hostname_len;
 	char* hostname = NULL;
 	hostname = sock_data->hostname;
@@ -287,7 +296,6 @@ int get_hostname(tls_sock_data_t* sock_data, char __user *optval, int* __user le
 	return 0;
 }
 
-/* The ID is just the pointer value sk */
 int get_id(tls_sock_data_t* sock_data, char __user *optval, int* __user optlen) {
 	int len;
 	if (get_user(len, optlen)) {
