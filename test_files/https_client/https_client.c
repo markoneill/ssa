@@ -44,7 +44,7 @@ int connect_to_host(char* host, char* service) {
 			perror("socket");
 			continue;
 		}
-	        if (setsockopt(sock, IPPROTO_IP, SO_REMOTE_HOSTNAME, host, strlen(host)+1) == -1) {
+	        if (setsockopt(sock, IPPROTO_TLS, SO_REMOTE_HOSTNAME, host, strlen(host)+1) == -1) {
 			perror("setsockopt: SO_REMOTE_HOSTNAME");
 			close(sock);
 			continue;
