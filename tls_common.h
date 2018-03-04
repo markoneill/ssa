@@ -32,7 +32,7 @@
 #include <linux/socket.h>
 #include <linux/net.h>
 
-#define RESPONSE_TIMEOUT	HZ*100
+#define RESPONSE_TIMEOUT	HZ*10
 #define DAEMON_START_PORT	8443
 #define NUM_DAEMONS		12
 
