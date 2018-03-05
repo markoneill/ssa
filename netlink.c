@@ -3,6 +3,7 @@
 
 #include "netlink.h"
 #include "tls_common.h"
+#include "tls_inet.h"
 
 int nl_fail(struct sk_buff* skb, struct genl_info* info);
 int daemon_cb(struct sk_buff* skb, struct genl_info* info);
@@ -164,6 +165,12 @@ int daemon_data_cb(struct sk_buff* skb, struct genl_info* info) {
 	}
 	data = nla_data(na);
 	len = nla_len(na);
+	printk(KERN_ALERT "callback seen and data is %s\n", data);
+	if (strncmp(data, "handshake", strlen("handshake")) == 0) {
+		printk(KERN_ALERT "association callback seen\n");
+		report_handshake_finished(key);
+		return 0;
+	}
 	report_data_return(key, data, len);
         return 0;
 }
