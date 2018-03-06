@@ -34,7 +34,7 @@
 
 #define RESPONSE_TIMEOUT	HZ*100
 #define DAEMON_START_PORT	8443
-#define NUM_DAEMONS		100
+#define NUM_DAEMONS		2
 
 typedef int (*setsockopt_t)(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen);
 typedef int (*getsockopt_t)(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen);
