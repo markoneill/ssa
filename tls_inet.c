@@ -162,9 +162,14 @@ int tls_inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len) {
 }
 
 int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, int flags) {
-	//int ret;
+	int ret;
 	/*struct sockaddr_in* uaddr_in;*/
+	int blocking;
 
+	struct sockaddr_in reroute_addr = {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+	};
 	struct sockaddr_in int_addr = {
 		.sin_family = AF_INET,
 		.sin_port = 0,
@@ -187,12 +192,23 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 		sock_data->int_addrlen = sizeof(int_addr);
 	}
 
-	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, sock_data->daemon_id);
-	if (flags & O_NONBLOCK) {
+	blocking = !(flags & O_NONBLOCK);
+	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
+			sock_data->daemon_id);
+
+	if (blocking == 0) {
+		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+			return -EHOSTUNREACH;
+		}
+		if (sock_data->response != 0) {
+			return sock_data->response;
+		}
+		/* XXX should we mess with the socket state here? Maybe fake SS_CONNECTING? */
 		return 0;
 	}
 
-	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+	/* Blocking case */
+	if (wait_for_completion_timeout(&sock_data->sock_event, sock->sk->sk_sndtimeo) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;
 	}
@@ -200,10 +216,12 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 		return sock_data->response;
 	}
 
-	/*if (ret != 0) {
+	reroute_addr.sin_port = htons(sock_data->daemon_id);
+	ret = ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), flags);
+	if (ret != 0) {
 		return ret;
 
-	}*/
+	}
 	sock_data->is_connected = 1;
 	return 0;
 }
@@ -289,7 +307,8 @@ int tls_inet_getsockopt(struct socket *sock, int level, int optname, char __user
 	return tls_common_getsockopt(sock_data, sock, level, optname, optval, optlen, ref_inet_stream_ops.getsockopt);
 }
 
-void report_handshake_finished(unsigned long key) {
+void report_handshake_finished(unsigned long key, int response, int blocking) {
+	/* XXX needs PF_UNIX support, unless we wanna scrap that */
 	struct sockaddr_in reroute_addr = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
@@ -301,8 +320,13 @@ void report_handshake_finished(unsigned long key) {
 		return;
 	}
 	sock_data->response = 0;
-	complete(&sock_data->sock_event);
-	reroute_addr.sin_port = htons(sock_data->daemon_id);
-	ref_inet_stream_ops.connect((struct socket*)key, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), 0);
+	if (blocking == 1) {
+		complete(&sock_data->sock_event);
+	}
+	else {
+		reroute_addr.sin_port = htons(sock_data->daemon_id);
+		ref_inet_stream_ops.connect((struct socket*)key, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), O_NONBLOCK);
+	}
 	return;
 }
+

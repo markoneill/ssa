@@ -196,7 +196,7 @@ int tls_unix_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 		sock_data->is_bound = 1;
 	}
 
-	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, sock_data->daemon_id);
+	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, sock_data->daemon_id,1);
 	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;

@@ -8,11 +8,12 @@
 int nl_fail(struct sk_buff* skb, struct genl_info* info);
 int daemon_cb(struct sk_buff* skb, struct genl_info* info);
 int daemon_data_cb(struct sk_buff* skb, struct genl_info* info);
+int daemon_handshake_cb(struct sk_buff* skb, struct genl_info* info);
 
 static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_UNSPEC] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_ID] = { .type = NLA_UNSPEC },
-	//[SSA_NL_A_PID] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_BLOCKING] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_COMM] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
@@ -95,10 +96,10 @@ static struct genl_ops ssa_nl_ops[] = {
                 .dumpit = NULL,
         },
         {
-                .cmd = SSA_NL_C_UPGRADE_NOTIFY,
+                .cmd = SSA_NL_C_HANDSHAKE_RETURN,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
-                .doit = nl_fail,
+                .doit = daemon_handshake_cb,
                 .dumpit = NULL,
         },
 };
@@ -165,13 +166,33 @@ int daemon_data_cb(struct sk_buff* skb, struct genl_info* info) {
 	}
 	data = nla_data(na);
 	len = nla_len(na);
-	printk(KERN_ALERT "callback seen and data is %s\n", data);
-	if (strncmp(data, "handshake", strlen("handshake")) == 0) {
-		printk(KERN_ALERT "association callback seen\n");
-		report_handshake_finished(key);
-		return 0;
-	}
 	report_data_return(key, data, len);
+        return 0;
+}
+
+int daemon_handshake_cb(struct sk_buff* skb, struct genl_info* info) {
+	struct nlattr* na;
+	unsigned long key;
+	int blocking;
+	int response;
+	if (info == NULL) {
+		printk(KERN_ALERT "Netlink: Message info is null\n");
+		return -1;
+	}
+	if ((na = info->attrs[SSA_NL_A_ID]) == NULL) {
+		printk(KERN_ALERT "Netlink: Unable to retrieve socket ID\n");
+		return -1;
+	}
+	key = nla_get_u64(na);
+	if ((na = info->attrs[SSA_NL_A_RETURN]) == NULL) {
+		printk(KERN_ALERT "Netlink: unable to get return value\n");
+	}
+	response = nla_get_u32(na);
+	if ((na = info->attrs[SSA_NL_A_BLOCKING]) == NULL) {
+		printk(KERN_ALERT "Netlink: Unable to get blocking value\n");
+	}
+	blocking = nla_get_u32(na);
+	report_handshake_finished(key, response, blocking);
         return 0;
 }
 
@@ -377,11 +398,12 @@ int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct s
 	return 0;
 }
 
-int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int port_id) {
+int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int blocking, int port_id) {
 	struct sk_buff* skb;
 	int ret;
 	void* msg_head;
 	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			nla_total_size(sizeof(int)) +
 			2 * nla_total_size(sizeof(struct sockaddr));
 
 	skb = genlmsg_new(msg_size, GFP_KERNEL);
@@ -410,6 +432,12 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	ret = nla_put(skb, SSA_NL_A_SOCKADDR_REMOTE, sizeof(struct sockaddr), rem_addr);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in nla_put (remote) [connect notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_BLOCKING, sizeof(blocking), &blocking);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (blocking) [connect notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}
@@ -548,48 +576,6 @@ int send_close_notification(unsigned long id, int port_id) {
 	ret = genlmsg_unicast(&init_net, skb, port_id);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_unicast [close notify]\n (%d)", ret);
-	}
-	return 0;
-}
-
-int send_upgrade_notification(unsigned long id, struct sockaddr* src_addr, int port_id) {
-	struct sk_buff* skb;
-	int ret;
-	void* msg_head;
-	int msg_size = nla_total_size(sizeof(unsigned long)) +
-			nla_total_size(sizeof(struct sockaddr));
-
-	skb = genlmsg_new(msg_size, GFP_KERNEL);
-	if (skb == NULL) {
-		printk(KERN_ALERT "Failed in genlmsg_new [upgrade notify]\n");
-		return -1;
-	}
-	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_UPGRADE_NOTIFY);
-	if (msg_head == NULL) {
-		printk(KERN_ALERT "Failed in genlmsg_put [upgrade notify]\n");
-		nlmsg_free(skb);
-		return -1;
-	}
-	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
-	if (ret != 0) {
-		printk(KERN_ALERT "Failed in nla_put (id) [upgrade notify]\n");
-		nlmsg_free(skb);
-		return -1;
-	}
-	ret = nla_put(skb, SSA_NL_A_SOCKADDR_INTERNAL, sizeof(struct sockaddr), src_addr);
-	if (ret != 0) {
-		printk(KERN_ALERT "Failed in nla_put (internal) [upgrade notify]\n");
-		nlmsg_free(skb);
-		return -1;
-	}
-	genlmsg_end(skb, msg_head);
-	/*ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
-	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_multicast [upgrade notify]\n (%d)", ret);
-	}*/
-	ret = genlmsg_unicast(&init_net, skb, port_id);
-	if (ret != 0) {
-		printk(KERN_ALERT "Failed in gemlmsg_unicast [upgrade notify]\n (%d)", ret);
 	}
 	return 0;
 }

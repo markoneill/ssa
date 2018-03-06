@@ -75,7 +75,6 @@ void tls_cleanup(void);
 
 /* Data reporting */
 void report_return(unsigned long key, int ret);
-void report_handshake_finished(unsigned long key);
 void report_data_return(unsigned long key, char* data, unsigned int len);
 
 /* Socket functionality */
