@@ -3,7 +3,6 @@
 
 #include "netlink.h"
 #include "tls_common.h"
-#include "tls_inet.h"
 
 int nl_fail(struct sk_buff* skb, struct genl_info* info);
 int daemon_cb(struct sk_buff* skb, struct genl_info* info);
@@ -173,7 +172,6 @@ int daemon_data_cb(struct sk_buff* skb, struct genl_info* info) {
 int daemon_handshake_cb(struct sk_buff* skb, struct genl_info* info) {
 	struct nlattr* na;
 	unsigned long key;
-	int blocking;
 	int response;
 	if (info == NULL) {
 		printk(KERN_ALERT "Netlink: Message info is null\n");
@@ -188,11 +186,7 @@ int daemon_handshake_cb(struct sk_buff* skb, struct genl_info* info) {
 		printk(KERN_ALERT "Netlink: unable to get return value\n");
 	}
 	response = nla_get_u32(na);
-	if ((na = info->attrs[SSA_NL_A_BLOCKING]) == NULL) {
-		printk(KERN_ALERT "Netlink: Unable to get blocking value\n");
-	}
-	blocking = nla_get_u32(na);
-	report_handshake_finished(key, response, blocking);
+	report_handshake_finished(key, response);
         return 0;
 }
 

@@ -10,6 +10,8 @@
 #include <linux/fs_struct.h>
 #include "socktls.h"
 #include "tls_common.h"
+#include "tls_inet.h"
+#include "tls_unix.h"
 #include "netlink.h"
 
 #define HASH_TABLE_BITSIZE	9
@@ -119,6 +121,30 @@ void report_data_return(unsigned long key, char* data, unsigned int len) {
 	complete(&sock_data->sock_event);
 	return;
 }
+
+void report_handshake_finished(unsigned long key, int response) {
+	tls_sock_data_t* sock_data;
+	sock_data = get_tls_sock_data(key);
+	//BUG_ON(sock_data == NULL);
+	if (sock_data == NULL) {
+		return;
+	}
+	sock_data->response = response;
+	if (sock_data->async_connect == 1) {
+		if (sock_data->unix_sock == NULL) {
+			inet_trigger_connect((struct socket*)key, sock_data->daemon_id);
+		}
+		else {
+			unix_trigger_connect((struct socket*)key, sock_data->daemon_id);
+		}
+		sock_data->async_connect = 0;
+	}
+	else {
+		complete(&sock_data->sock_event);
+	}
+	return;
+}
+
 
 int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen, setsockopt_t orig_func) {
 	int ret;

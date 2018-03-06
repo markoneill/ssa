@@ -211,7 +211,6 @@ int tls_unix_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	if (ret != 0) {
 		return ret;
 	}
-	sock_data->is_connected = 1;
 	return 0;
 }
 
@@ -328,4 +327,7 @@ ssize_t tls_unix_splice_read(struct socket *sk, loff_t *ppos, struct pipe_inode_
 	return ref_unix_stream_ops.splice_read(unix_sock, ppos, pipe, len, flags);
 }
 
-
+void unix_trigger_connect(struct socket* sock, int daemon_id) {
+	/* XXX construct this after redoing tls_unix_connect after TCP fashion */
+	return;
+}

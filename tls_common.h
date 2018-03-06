@@ -34,7 +34,7 @@
 
 #define RESPONSE_TIMEOUT	HZ*10
 #define DAEMON_START_PORT	8443
-#define NUM_DAEMONS		12
+#define NUM_DAEMONS		100
 
 typedef int (*setsockopt_t)(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen);
 typedef int (*getsockopt_t)(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen);
@@ -56,7 +56,7 @@ typedef struct tls_sock_data {
 	int rem_addrlen;
         char *hostname;
 	int is_bound;
-	int is_connected;
+	int async_connect;
 	struct completion sock_event;
 	int response;
 	char* rdata; /* returned data from asynchronous callback */
@@ -76,6 +76,7 @@ void tls_cleanup(void);
 /* Data reporting */
 void report_return(unsigned long key, int ret);
 void report_data_return(unsigned long key, char* data, unsigned int len);
+void report_handshake_finished(unsigned long key, int response);
 
 /* Socket functionality */
 int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen, setsockopt_t orig_func);

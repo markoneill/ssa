@@ -203,6 +203,7 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 		if (sock_data->response != 0) {
 			return sock_data->response;
 		}
+		sock_data->async_connect = 1;
 		/* XXX should we mess with the socket state here? Maybe fake SS_CONNECTING? */
 		return 0;
 	}
@@ -222,7 +223,6 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 		return ret;
 
 	}
-	sock_data->is_connected = 1;
 	return 0;
 }
 
@@ -307,26 +307,12 @@ int tls_inet_getsockopt(struct socket *sock, int level, int optname, char __user
 	return tls_common_getsockopt(sock_data, sock, level, optname, optval, optlen, ref_inet_stream_ops.getsockopt);
 }
 
-void report_handshake_finished(unsigned long key, int response, int blocking) {
-	/* XXX needs PF_UNIX support, unless we wanna scrap that */
+void inet_trigger_connect(struct socket* sock, int daemon_id) {
 	struct sockaddr_in reroute_addr = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
 	};
-	tls_sock_data_t* sock_data;
-	sock_data = get_tls_sock_data(key);
-	//BUG_ON(sock_data == NULL);
-	if (sock_data == NULL) {
-		return;
-	}
-	sock_data->response = 0;
-	if (blocking == 1) {
-		complete(&sock_data->sock_event);
-	}
-	else {
-		reroute_addr.sin_port = htons(sock_data->daemon_id);
-		ref_inet_stream_ops.connect((struct socket*)key, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), O_NONBLOCK);
-	}
+	reroute_addr.sin_port = htons(daemon_id);
+	ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), O_NONBLOCK);
 	return;
 }
-
