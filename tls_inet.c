@@ -209,7 +209,7 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	}
 
 	/* Blocking case */
-	if (wait_for_completion_timeout(&sock_data->sock_event, sock->sk->sk_sndtimeo) == 0) {
+	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;
 	}
