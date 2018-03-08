@@ -193,6 +193,26 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	}
 
 	blocking = !(flags & O_NONBLOCK);
+
+	/* If we've been interrupted (in a previous call to connect)
+	 * then we're currently being called again and shouldn't
+	 * double send connect notifies or wait */
+	if (sock_data->interrupted == 1) {
+		reroute_addr.sin_port = htons(sock_data->daemon_id);
+		ret = ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), flags);
+		if (ret != 0) {
+			if (ret == -ERESTARTSYS) { /* Interrupted by signal, transparently restart */
+				sock_data->interrupted = 1;
+			}
+			else {
+				sock_data->interrupted = 0;
+			}
+		}
+		return ret;
+	}
+
+	/* Connect notifications and waiting should only happen the first time for
+	 * any connection attempt */
 	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
 			sock_data->daemon_id);
 
@@ -220,6 +240,9 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	reroute_addr.sin_port = htons(sock_data->daemon_id);
 	ret = ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), flags);
 	if (ret != 0) {
+		if (ret == -ERESTARTSYS) { /* Interrupted by signal, transparently restart */
+			sock_data->interrupted = 1;
+		}
 		return ret;
 
 	}
