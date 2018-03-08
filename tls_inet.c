@@ -223,7 +223,7 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 			return -EHOSTUNREACH;
 		}
 		if (sock_data->response != 0) {
-			sock->sk->sk_err = sock_data->response;
+			sock->sk->sk_err = -sock_data->response;
 			return sock_data->response;
 		}
 		/* XXX should we mess with the socket state here? Maybe fake SS_CONNECTING? */
