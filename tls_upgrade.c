@@ -135,6 +135,7 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz, int port) {
 		return -1;
 	}
 	
+	
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	memcpy(addr.sun_path, tls_upgrade_path, pathlen);
@@ -202,6 +203,7 @@ ssize_t write_fd(int fd_gift, char* buf, int buf_sz, int port) {
 int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* optval, unsigned int optlen) {
 	int fd;
 	char con_info[MAX_CON_INFO_SIZE];
+	char hostname[256];
 	int con_info_size;
 	int is_accepting;
 	int error;
@@ -215,11 +217,14 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 	// first check if it is our special opt
 	// otherwise pass it on
 	if (level == SOL_TCP && optname == TCP_UPGRADE_TLS) {
-		if (optlen < sizeof(int)) {
+		if (optlen == 0) {
 			printk(KERN_ERR "optlen for TCP_UPGRADE_TLS was not\n");
-			is_accepting = 0;
+			is_accepting = 1;
 		} else {
-			is_accepting = *((int*)optval);
+			if (strncpy_from_user(hostname, optval, min_t(long, 255, optlen)) < 0) {
+				return -EFAULT;
+			}
+			is_accepting = 0;
 		}
 		
 		printk(KERN_INFO "Got TCP_UPGRADE_TLS %d\n", is_accepting);
@@ -238,6 +243,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 			printk(KERN_ERR "Could not create TLS socket :(\n");
 			return -1;
 		}
+		kernel_setsockopt(new_sock, IPPROTO_TLS, SO_REMOTE_HOSTNAME, hostname, strlen(hostname)+1);
 		printk(KERN_INFO "Made replacement connection\n");
 
 		sock_data = get_tls_sock_data((unsigned long)new_sock);
