@@ -213,22 +213,27 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 
 	/* Connect notifications and waiting should only happen the first time for
 	 * any connection attempt */
-	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
-			sock_data->daemon_id);
 
 	if (blocking == 0) {
+		sock_data->async_connect = 1;
+		send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
+			sock_data->daemon_id);
+		printk(KERN_ALERT "nonblocking wait going\n");
 		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 			return -EHOSTUNREACH;
 		}
 		if (sock_data->response != 0) {
+			sock->sk->sk_err = sock_data->response;
 			return sock_data->response;
 		}
-		sock_data->async_connect = 1;
 		/* XXX should we mess with the socket state here? Maybe fake SS_CONNECTING? */
 		return 0;
 	}
 
 	/* Blocking case */
+	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
+			sock_data->daemon_id);
+	//printk(KERN_ALERT "blocking wait going\n");
 	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;
@@ -337,5 +342,6 @@ void inet_trigger_connect(struct socket* sock, int daemon_id) {
 	};
 	reroute_addr.sin_port = htons(daemon_id);
 	ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), O_NONBLOCK);
+	printk(KERN_ALERT "Async connect done\n");
 	return;
 }
