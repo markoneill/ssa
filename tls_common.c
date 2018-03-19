@@ -169,9 +169,9 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 		ret = set_remote_hostname(sock_data, koptval, optlen);
 		break;
 	case SO_HOSTNAME:
-	case SO_TRUSTED_PEER_CERTIFICATES:
 		ret = 0;
 		break;
+	case SO_TRUSTED_PEER_CERTIFICATES:
 	case SO_CERTIFICATE_CHAIN:
 	case SO_PRIVATE_KEY:
 		/* We convert relative paths to absolute ones
