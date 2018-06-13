@@ -189,6 +189,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	case SO_SESSION_TTL:
 	case SO_DISABLE_CIPHER:
 	case SO_PEER_IDENTITY:
+	case SO_REQUEST_PEER_AUTH:
 	case SO_PEER_CERTIFICATE:
 	case SO_ID:
 	default:
@@ -250,6 +251,7 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	case SO_SESSION_TTL:
 	case SO_DISABLE_CIPHER:
 	case SO_PEER_IDENTITY:
+	case SO_REQUEST_PEER_AUTH:
 	case SO_PEER_CERTIFICATE:
 		send_getsockopt_notification((unsigned long)sock_data->key, level, optname, sock_data->daemon_id);
 		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {

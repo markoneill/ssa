@@ -14,10 +14,11 @@
 #define SO_SESSION_TTL                   91
 #define SO_DISABLE_CIPHER                92
 #define SO_PEER_IDENTITY		 93
+#define SO_REQUEST_PEER_AUTH		 94
 
 /* Internal use only */
-#define SO_PEER_CERTIFICATE              94
-#define SO_ID                            95
+#define SO_PEER_CERTIFICATE              95
+#define SO_ID                            96
 
 /* TCP options */
 #define TCP_UPGRADE_TLS         33
