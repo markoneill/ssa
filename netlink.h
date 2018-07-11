@@ -7,6 +7,8 @@
 enum {
         SSA_NL_A_UNSPEC,
 	SSA_NL_A_ID,
+	SSA_NL_A_EARLYDATA,
+	SSA_NL_A_EARLYDATA_SIZE,
 	SSA_NL_A_BLOCKING,
 	SSA_NL_A_COMM,
 	SSA_NL_A_SOCKADDR_INTERNAL,
@@ -30,6 +32,7 @@ enum {
 	SSA_NL_C_GETSOCKOPT_NOTIFY,
         SSA_NL_C_BIND_NOTIFY,
         SSA_NL_C_CONNECT_NOTIFY,
+        SSA_NL_C_CONNECT_AND_SEND_NOTIFY,
         SSA_NL_C_LISTEN_NOTIFY,
 	SSA_NL_C_ACCEPT_NOTIFY,
 	SSA_NL_C_CLOSE_NOTIFY,
@@ -53,6 +56,7 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 int send_getsockopt_notification(unsigned long id, int level, int optname, int port_id);
 int send_bind_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr, int port_id);
 int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int blocking, int port_id);
+int send_connect_and_send_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int blocking, int port_id, struct msghdr *msg, size_t size);
 int send_listen_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* ext_addr, int port_id);
 int send_accept_notification(unsigned long id, struct sockaddr* int_addr, int port_id);
 int send_close_notification(unsigned long id, int port_id);

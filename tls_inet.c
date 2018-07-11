@@ -32,7 +32,13 @@ int tls_inet_listen(struct socket *sock, int backlog);
 int tls_inet_accept(struct socket *sock, struct socket *newsock, int flags, bool kern);
 int tls_inet_setsockopt(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen);
 int tls_inet_getsockopt(struct socket *sock, int level, int optname, char __user *optval, int __user *optlen);
+int tls_inet_sendmsg(struct socket *sock, struct msghdr *msg, size_t size);
+
 /* We don't need sendmsg, recvmsg, poll, etc here because we're using the native socket functions */
+
+// Helper function for tls_inet_sendmsg
+int connect_and_send(struct socket *sock, struct sockaddr *uaddr, int addr_len, int flags, struct msghdr *msg, size_t size);
+
 
 int set_tls_prot_inet_stream(struct proto* tls_prot, struct proto_ops* tls_proto_ops) {
 	/* We share operations with TCP for transport to daemon */
@@ -65,6 +71,7 @@ int set_tls_prot_inet_stream(struct proto* tls_prot, struct proto_ops* tls_proto
 	tls_proto_ops->accept = tls_inet_accept;
 	tls_proto_ops->setsockopt = tls_inet_setsockopt;
 	tls_proto_ops->getsockopt = tls_inet_getsockopt;
+    tls_proto_ops->sendmsg = tls_inet_sendmsg;
 
 	return 0;
 }
@@ -253,6 +260,112 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	}
 	return 0;
 }
+
+int connect_and_send(struct socket *sock, struct sockaddr *uaddr, int addr_len, int flags, struct msghdr *msg, size_t size) {
+
+	int ret;
+	/*struct sockaddr_in* uaddr_in;*/
+	int blocking;
+
+	struct sockaddr_in reroute_addr = {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK)
+	};
+	struct sockaddr_in int_addr = {
+		.sin_family = AF_INET,
+		.sin_port = 0,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+	};
+
+	/* Save original destination address information */
+	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
+	sock_data->rem_addr = (struct sockaddr)(*uaddr);
+	sock_data->rem_addrlen = addr_len;
+
+	/* Pre-emptively bind the source port so we can register it before remote
+	 * connection. We only do this if the application hasn't explicitly called
+	 * bind already */
+	if (sock_data->is_bound == 0) {
+		ref_inet_stream_ops.bind(sock, (struct sockaddr*)&int_addr, sizeof(int_addr));
+		int_addr.sin_port = inet_sk(sock->sk)->inet_sport;
+		memcpy(&sock_data->int_addr, &int_addr, sizeof(int_addr));
+		sock_data->is_bound = 1;
+		sock_data->int_addrlen = sizeof(int_addr);
+	}
+
+	blocking = !(flags & O_NONBLOCK);
+
+	/* If we've been interrupted (in a previous call to connect)
+	 * then we're currently being called again and shouldn't
+	 * double send connect notifies or wait */
+	if (sock_data->interrupted == 1) {
+		reroute_addr.sin_port = htons(sock_data->daemon_id);
+		ret = ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), flags);
+		if (ret != 0) {
+			if (ret == -ERESTARTSYS) { /* Interrupted by signal, transparently restart */
+				sock_data->interrupted = 1;
+			}
+			else {
+				sock_data->interrupted = 0;
+			}
+		}
+		return ret;
+	}
+
+	/* Connect notifications and waiting should only happen the first time for
+	 * any connection attempt */
+
+	if (blocking == 0) {
+		sock_data->async_connect = 1;
+		send_connect_and_send_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
+			sock_data->daemon_id,msg,size);
+		printk(KERN_ALERT "nonblocking wait going\n");
+		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+			return -EHOSTUNREACH;
+		}
+		if (sock_data->response != 0) {
+			sock->sk->sk_err = -sock_data->response;
+			return sock_data->response;
+		}
+		/* XXX should we mess with the socket state here? Maybe fake SS_CONNECTING? */
+		return 0;
+	}
+
+	/* Blocking case */
+	send_connect_and_send_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
+			sock_data->daemon_id,msg,size);
+	//printk(KERN_ALERT "blocking wait going\n");
+	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+		/* Let's lie to the application if the daemon isn't responding */
+		return -EHOSTUNREACH;
+	}
+	if (sock_data->response != 0) {
+		return sock_data->response;
+	}
+
+	reroute_addr.sin_port = htons(sock_data->daemon_id);
+	ret = ref_inet_stream_ops.connect(sock, ((struct sockaddr*)&reroute_addr), sizeof(reroute_addr), flags);
+	if (ret != 0) {
+		if (ret == -ERESTARTSYS) { /* Interrupted by signal, transparently restart */
+			sock_data->interrupted = 1;
+		}
+		return ret;
+	}
+	return 0;
+}
+
+int tls_inet_sendmsg(struct socket *sock, struct msghdr *msg, size_t size){
+    int flag = msg->msg_flags;
+
+    if (flag & MSG_FASTOPEN){ 
+        return connect_and_send(sock,(struct sockaddr*)msg->msg_name,msg->msg_namelen,0, msg, size);
+    }
+    else{
+    	return ref_inet_stream_ops.sendmsg(sock,msg,size);	
+    }
+    
+}
+
 
 int tls_inet_listen(struct socket *sock, int backlog) {
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);

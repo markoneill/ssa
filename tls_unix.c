@@ -55,7 +55,7 @@ int set_tls_prot_unix_stream(struct proto* tls_prot, struct proto_ops* tls_proto
 	tls_proto_ops->getsockopt = tls_unix_getsockopt;
 	/* INET ops have no socketpair, so we're emulating that */
 	tls_proto_ops->socketpair = sock_no_socketpair;
-	tls_proto_ops->getname = tls_unix_getname;
+	//tls_proto_ops->getname = tls_unix_getname;
 	tls_proto_ops->poll = tls_unix_poll;
 	tls_proto_ops->ioctl = tls_unix_ioctl;
 	tls_proto_ops->shutdown = tls_unix_shutdown;
@@ -270,12 +270,13 @@ int tls_unix_getsockopt(struct socket *sock, int level, int optname, char __user
 	return tls_common_getsockopt(sock_data, unix_sock, level, optname, optval, optlen, NULL);
 }
 
+/*
 int tls_unix_getname(struct socket *sock, struct sockaddr *uaddr, int *uaddr_len, int peer) {
 	struct socket* unix_sock;
 	tls_sock_data_t* sock_data = get_tls_sock_data((unsigned long)sock);
 	unix_sock = sock_data->unix_sock;
 	return ref_unix_stream_ops.getname(unix_sock, uaddr, uaddr_len, peer);
-}
+}*/
 
 unsigned int tls_unix_poll(struct file *file, struct socket *sock, struct poll_table_struct *wait) {
 	struct socket* unix_sock;

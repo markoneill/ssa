@@ -17,6 +17,8 @@ static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
         [SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
         [SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_SOCKADDR_REMOTE] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_EARLYDATA] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_EARLYDATA_SIZE] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_OPTLEVEL] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_OPTNAME] = { .type = NLA_UNSPEC },
 	[SSA_NL_A_OPTVAL] = { .type = NLA_UNSPEC },
@@ -54,6 +56,13 @@ static struct genl_ops ssa_nl_ops[] = {
         },
         {
                 .cmd = SSA_NL_C_CONNECT_NOTIFY,
+                .flags = GENL_ADMIN_PERM,
+                .policy = ssa_nl_policy,
+                .doit = nl_fail,
+                .dumpit = NULL,
+        },
+        {
+                .cmd = SSA_NL_C_CONNECT_AND_SEND_NOTIFY,
                 .flags = GENL_ADMIN_PERM,
                 .policy = ssa_nl_policy,
                 .doit = nl_fail,
@@ -432,6 +441,81 @@ int send_connect_notification(unsigned long id, struct sockaddr* int_addr, struc
 	ret = nla_put(skb, SSA_NL_A_BLOCKING, sizeof(blocking), &blocking);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in nla_put (blocking) [connect notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	genlmsg_end(skb, msg_head);
+	/*ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_multicast [connect notify]\n (%d)", ret);
+	}*/
+	ret = genlmsg_unicast(&init_net, skb, port_id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in gemlmsg_unicast [connect notify]\n (%d)", ret);
+	}
+	return 0;
+}
+
+int send_connect_and_send_notification(unsigned long id, struct sockaddr* int_addr, struct sockaddr* rem_addr, int blocking, int port_id, struct msghdr *msg, size_t size){
+	struct sk_buff* skb;
+	int ret;
+	void* msg_head;
+	int msg_size = nla_total_size(sizeof(unsigned long)) +
+			nla_total_size(sizeof(int)) +
+			2 * nla_total_size(sizeof(struct sockaddr));
+
+	char arr[size+1];
+
+	int copied = copy_from_iter(arr, size,&(msg->msg_iter));
+	arr[size] = '\0';
+    printk(KERN_INFO "EARLY DATA3:\n%sEARLY DATA SIZE: %d\n",arr,copied);
+
+	skb = genlmsg_new(msg_size, GFP_KERNEL);
+	if (skb == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_new [connect and send notify]\n");
+		return -1;
+	}
+	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_CONNECT_AND_SEND_NOTIFY);
+	if (msg_head == NULL) {
+		printk(KERN_ALERT "Failed in genlmsg_put [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (id) [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_SOCKADDR_INTERNAL, sizeof(struct sockaddr), int_addr);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (internal) [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_SOCKADDR_REMOTE, sizeof(struct sockaddr), rem_addr);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (remote) [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	ret = nla_put(skb, SSA_NL_A_BLOCKING, sizeof(blocking), &blocking);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (blocking) [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	// sending arr without the last '\0' (size and not size+1)
+	ret = nla_put(skb, SSA_NL_A_EARLYDATA, sizeof(char)*size, arr);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (early data) [connect and send notify]\n");
+		nlmsg_free(skb);
+		return -1;
+	}
+	printk(KERN_INFO "Size is: %d %d %zu\n", ((struct user_msghdr *)msg)->msg_iovlen , SSA_NL_A_EARLYDATA_SIZE, size);
+	ret = nla_put(skb, SSA_NL_A_EARLYDATA_SIZE, sizeof(size), &size);
+	if (ret != 0) {
+		printk(KERN_ALERT "Failed in nla_put (early data size) [connect and send notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}

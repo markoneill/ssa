@@ -123,6 +123,7 @@ void report_data_return(unsigned long key, char* data, unsigned int len) {
 }
 
 void report_handshake_finished(unsigned long key, int response) {
+	printk(KERN_INFO "THIS GETS CALLED\n");
 	tls_sock_data_t* sock_data;
 	sock_data = get_tls_sock_data(key);
 	//BUG_ON(sock_data == NULL);
@@ -142,6 +143,7 @@ void report_handshake_finished(unsigned long key, int response) {
 	else {
 		complete(&sock_data->sock_event);
 	}
+	
 	return;
 }
 
