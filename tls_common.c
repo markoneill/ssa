@@ -148,6 +148,7 @@ void report_handshake_finished(unsigned long key, int response) {
 
 int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen, setsockopt_t orig_func) {
 	int ret;
+	int timeout_val = RESPONSE_TIMEOUT;
 	char* koptval;
 	if (optval == NULL) {
 		return -EINVAL;	
@@ -189,7 +190,12 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	case SO_SESSION_TTL:
 	case SO_DISABLE_CIPHER:
 	case SO_PEER_IDENTITY:
+		ret = 0;
+		break;
 	case SO_REQUEST_PEER_AUTH:
+		timeout_val = HZ*150;
+		ret = 0;
+		break;
 	case SO_PEER_CERTIFICATE:
 	case SO_ID:
 	default:
@@ -207,7 +213,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 
 	send_setsockopt_notification((unsigned long)sock_data->key, level, optname, koptval, optlen, sock_data->daemon_id);
 	kfree(koptval);
-	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+	if (wait_for_completion_timeout(&sock_data->sock_event, timeout_val) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -ENOBUFS;
 	}
