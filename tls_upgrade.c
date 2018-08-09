@@ -243,7 +243,7 @@ int hook_tcp_setsockopt(struct sock* sk, int level, int optname, char __user* op
 			printk(KERN_ERR "Could not create TLS socket :(\n");
 			return -1;
 		}
-		kernel_setsockopt(new_sock, IPPROTO_TLS, SO_REMOTE_HOSTNAME, hostname, strlen(hostname)+1);
+		kernel_setsockopt(new_sock, IPPROTO_TLS, TLS_REMOTE_HOSTNAME, hostname, strlen(hostname)+1);
 		printk(KERN_INFO "Made replacement connection\n");
 
 		sock_data = get_tls_sock_data((unsigned long)new_sock);
