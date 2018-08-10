@@ -7,7 +7,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "socktls.h"
+#include "../socktls.h"
 #define ADDR	"localhost"
 #define PORT	8080
 
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
 	printf("Setsockopt %d\n", setsockopt(con, SOL_TCP, TCP_UPGRADE_TLS, &optval, optlen));
 
 	// set hostname
-	setsockopt(con, IPPROTO_TLS, SO_REMOTE_HOSTNAME, "google.com", sizeof("google.com"));
+	setsockopt(con, IPPROTO_TLS, TLS_REMOTE_HOSTNAME, "google.com", sizeof("google.com"));
 
 
 	error = send(con, MSG, sizeof(MSG), 0);
