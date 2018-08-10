@@ -9,6 +9,8 @@
 *.db
 Module.symvers
 test_files/*make
+test_files/tests
+test_files/passfd_client
 modules.order
 .tmp_versions/*
 *.swp
