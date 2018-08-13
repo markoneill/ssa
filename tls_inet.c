@@ -234,7 +234,7 @@ int tls_inet_connect(struct socket *sock, struct sockaddr *uaddr, int addr_len, 
 	send_connect_notification((unsigned long)sock, &sock_data->int_addr, uaddr, blocking,
 			sock_data->daemon_id);
 	//printk(KERN_ALERT "blocking wait going\n");
-	if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
+	if (wait_for_completion_timeout(&sock_data->sock_event, HANDSHAKE_TIMEOUT) == 0) {
 		/* Let's lie to the application if the daemon isn't responding */
 		return -EHOSTUNREACH;
 	}
