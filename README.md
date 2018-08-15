@@ -3,7 +3,9 @@ The SSA is a kernal module that allows programmers create a secure TLS connectio
 
 ## Prerequisites
 If you have alread installed the ssa Daemon then all the packages that you need can be installed by using running `./install_packages.sh`
-you need to install kernal development tools 
+
+If you haven't run that script and just wan the SSA you need to install kernal development tools 
+
 ```
 sudo dnf install kernel-devel
 ```
