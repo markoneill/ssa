@@ -24,13 +24,13 @@ insmod ssa.ko
 ```
 
 ## Removal
-To remove the SSA kernel module, shut down the encryption daemon (if running), and then the following command as a privileged user:
+To remove the SSA kernel module, shut down the encryption daemon (if running), and then run the following command as a privileged user:
 ```
 rmmod ssa
 ```
 
 ## Compatibility
-The SSA is actively developed on Fedora, but may with with minor or few changes for other distributions.
+The SSA is actively developed on Fedora, but may work for other distributions with a few minor changes.
 
 ## Using the SSA
 We will be providing a formal API specicification in this README and on [owntrust.org](https://owntrust.org) in the very near future. Eager users are encouraged to see our publication (linked above), code, or to contact us directly with questions.
