@@ -1,5 +1,5 @@
 # Secure Socket API (SSA)
-The SSA is a Linux kernel module that allows programmers create secure TLS connections using the standard POSIX socket API. This allows programmers to focus more on the developement of their apps without having to interface with complicated TLS libraries. The SSA also allows system administrtors and other power users to customize TLS settings for all connections on the machines they manage, according to their own needs.
+The SSA is a Linux kernel module that allows programmers to easily create secure TLS connections using the standard POSIX socket API. This allows programmers to focus more on the developement of their apps without having to interface with complicated TLS libraries. The SSA also allows system administrtors and other power users to customize TLS settings for all connections on the machines they manage, according to their own needs.
 
 ## Publication
 You can read more about the SSA, it's design goals, and features in our [USENIX Security 2018 paper](https://www.usenix.org/conference/usenixsecurity18/presentation/oneill)
@@ -31,6 +31,9 @@ rmmod ssa
 
 ## Compatibility
 The SSA is actively developed on Fedora, but may with with minor or few changes for other distributions.
+
+## Using the SSA
+We will be providing a formal API specicification in this README and on [owntrust.org](https://owntrust.org) in the very near future. Eager users are encouraged to see our publication (linked above), code, or to contact us directly with questions.
 
 ## Status
 The SSA is currently a research prototype. As such, it should not yet be used in any mission critical environments. However, we are working toward release as a viable tool for the general public.
