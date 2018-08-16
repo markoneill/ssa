@@ -1,24 +1,36 @@
 # Secure Socket API (SSA)
-The SSA is a kernal module that allows programmers create a secure TLS connection using the POSIX API. This allows programmers to focus more on the developement of their apps without having to worry about security in their connections. The SSA also allows for sys admins to customize settings for their secure connections such as what cypher suites they want to use and what version of TLS they are willing to connect with.
+The SSA is a Linux kernel module that allows programmers create secure TLS connections using the standard POSIX socket API. This allows programmers to focus more on the developement of their apps without having to interface with complicated TLS libraries. The SSA also allows system administrtors and other power users to customize TLS settings for all connections on the machines they manage, according to their own needs.
+
+## Publication
+You can read more about the SSA, it's design goals, and features in our [USENIX Security 2018 paper](https://www.usenix.org/conference/usenixsecurity18/presentation/oneill)
 
 ## Prerequisites
-If you have alread installed the ssa Daemon then all the packages that you need can be installed by using running `./install_packages.sh`
+The SSA has two components - a kernel module (this repository) and a [userspace daemon](https://github.com/markoneill/ssa-daemon).
+Both need to be installed and running to provide TLS as an operating system service.
+The userspace daemon has its own README with installation instructions.
 
-If you haven't run that script and just want the SSA you need to install kernal development tools 
+Before building the SSA kernel module (this repo), you will need to install the relevant kernel headers and development packages for your Linux distribution
 
+For example, on Fedora, run
 ```
-sudo dnf install kernel-devel
+sudo dnf install kernel-devel kernel-headers
 ```
 
-## Installation
+## Build and Installation
 To install the SSA module type these commands into the terminal while in the ssa project folder as root user
 ```
 make
 insmod ssa.ko
 ```
-## Configuration
-The configuration features are in the ssa daemon c
+
+## Removal
+To remove the SSA kernel module, shut down the encryption daemon (if running), and then the following command as a privileged user:
+```
+rmmod ssa
+```
+
 ## Compatibility
-Currently the SSA works with Fedora 26 kernal v4.17
-later versions of Fedora are supported with slight code changes
-with changes slight changes Ubuntu should work as well
+The SSA is actively developed on Fedora, but may with with minor or few changes for other distributions.
+
+## Status
+The SSA is currently a research prototype. As such, it should not yet be used in any mission critical environments. However, we are working toward release as a viable tool for the general public.
