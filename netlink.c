@@ -247,7 +247,7 @@ int send_setsockopt_notification(unsigned long id, int level, int optname, void*
 	void* msg_head;
 	int msg_size = nla_total_size(sizeof(unsigned long)) +
 			2 * nla_total_size(sizeof(int)) +
-			optlen;
+			nla_total_size(optlen);
 
 	skb = genlmsg_new(msg_size, GFP_KERNEL);
 	if (skb == NULL) {
