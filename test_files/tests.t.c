@@ -905,7 +905,7 @@ void run_get_cert_test(void) {
 	int cert_len = 1024*4;
 	char cert[1024*4];
 	memset(http_response, 0, 4096);
-	if (getsockopt(sock_fd, IPPROTO_TLS, TLS_PEER_CERTIFICATE, cert, &cert_len) == -1) {
+	if (getsockopt(sock_fd, IPPROTO_TLS, TLS_PEER_CERTIFICATE_CHAIN, cert, &cert_len) == -1) {
 		perror("Failed in getsockopt:");
 	}
 	printf("%s\n", cert);

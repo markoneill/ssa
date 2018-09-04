@@ -196,7 +196,7 @@ int tls_common_setsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 		timeout_val = HZ*150;
 		ret = 0;
 		break;
-	case TLS_PEER_CERTIFICATE:
+	case TLS_PEER_CERTIFICATE_CHAIN:
 	case TLS_ID:
 	default:
 		ret = 0;
@@ -258,7 +258,7 @@ int tls_common_getsockopt(tls_sock_data_t* sock_data, struct socket *sock, int l
 	case TLS_DISABLE_CIPHER:
 	case TLS_PEER_IDENTITY:
 	case TLS_REQUEST_PEER_AUTH:
-	case TLS_PEER_CERTIFICATE:
+	case TLS_PEER_CERTIFICATE_CHAIN:
 		send_getsockopt_notification((unsigned long)sock_data->key, level, optname, sock_data->daemon_id);
 		if (wait_for_completion_timeout(&sock_data->sock_event, RESPONSE_TIMEOUT) == 0) {
 			/* Let's lie to the application if the daemon isn't responding */

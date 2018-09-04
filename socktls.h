@@ -13,11 +13,11 @@
 #define TLS_ALPN                          90
 #define TLS_SESSION_TTL                   91
 #define TLS_DISABLE_CIPHER                92
-#define TLS_PEER_IDENTITY		 93
-#define TLS_REQUEST_PEER_AUTH		 94
+#define TLS_PEER_IDENTITY		  93
+#define TLS_REQUEST_PEER_AUTH		  94
 
 /* Internal use only */
-#define TLS_PEER_CERTIFICATE              95
+#define TLS_PEER_CERTIFICATE_CHAIN        95
 #define TLS_ID                            96
 
 /* TCP options */
