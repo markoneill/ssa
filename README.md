@@ -13,7 +13,7 @@ Before building the SSA kernel module (this repo), you will need to install the 
 
 For example, on Fedora, run
 ```
-sudo dnf install kernel-devel kernel-headers
+sudo dnf install kernel-devel-`uname -r` kernel-headers-`uname -r`
 ```
 
 ## Build and Installation
