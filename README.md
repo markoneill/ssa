@@ -14,6 +14,7 @@ Before building the SSA kernel module (this repo), you will need to install the 
 For example, on Fedora, run
 ```
 sudo dnf install kernel-devel-`uname -r` kernel-headers-`uname -r`
+sudo dnf install elfutils-libelf-devel
 ```
 
 ## Build and Installation
