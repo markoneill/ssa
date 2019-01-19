@@ -3,11 +3,11 @@ CC_FLAGS = -w -g -Wall -O3
  
 EXEC = all
 PASS_TEST = passfd_client
-PASS_TEST_SRC = passfd_client.c
+PASS_TEST_SRC = passfd_client.t.c
 PASS_TEST_OBJ = $(PASS_TEST_SRC:.c=.o)
 
 TESTS = tests
-TESTS_SRC = tests.c
+TESTS_SRC = tests.t.c
 TESTS_OBJ = $(TESTS_SRC:.c=.o)
 
 SOURCES_ALL = $(wildcard *.c)
