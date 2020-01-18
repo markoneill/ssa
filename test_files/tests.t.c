@@ -86,8 +86,8 @@ void run_s_server(){
 		printf("starting s_server\n");
 		pid = fork();
 		if (pid == 0) {
-			char *args[] = {"/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", "-quiet", NULL};
-			execv("/bin/openssl", args);
+			char *args[] = {"/usr/bin/openssl", "s_server", "-cert", "tls_server/pem_files/certificate.pem", "-key", "tls_server/pem_files/key.pem", "-accept", "8888", "-quiet", NULL};
+			execv("/usr/bin/openssl", args);
 			fprintf(stderr, "Failed to execute s_server\n");
 		} else {
 			sleep(1);
@@ -456,7 +456,7 @@ void run_connect_benchmark(void) {
 	}
 
 	const char hostname[] = "www.google.com";
-        if (setsockopt(sock_fd, IPPROTO_IP, TLS_REMOTE_HOSTNAME, hostname, sizeof(hostname)) == -1) {
+        if (setsockopt(sock_fd, IPPROTO_TLS, TLS_REMOTE_HOSTNAME, hostname, sizeof(hostname)) == -1) {
 		perror("setsockopt: TLS_REMOTE_HOSTNAME");
 		exit(EXIT_FAILURE);
 	}
